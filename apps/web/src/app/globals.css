@@ -1,0 +1,157 @@
+@import "tailwindcss";
+@source "../../../packages/ui/src";
+
+@theme inline {
+  --font-sans: var(--font-ui);
+  --font-display: var(--font-display);
+}
+
+@layer base {
+  :root {
+    --font-ui: "Instrument Sans", sans-serif;
+    --font-display: "Sora", sans-serif;
+    --bg-base: #050a16;
+    --bg-panel: rgba(10, 19, 35, 0.84);
+    --line-soft: rgba(150, 236, 255, 0.14);
+    --accent-cyan: #5ee9ff;
+    --accent-lime: #b2ff52;
+    --accent-amber: #ffbe55;
+    --accent-coral: #ff6b63;
+    --accent-violet: #8d8bff;
+  }
+
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-height: 100vh;
+    overflow-x: clip;
+    background:
+      radial-gradient(circle at top left, rgba(94, 233, 255, 0.16), transparent 26%),
+      radial-gradient(circle at 82% 18%, rgba(178, 255, 82, 0.14), transparent 22%),
+      linear-gradient(180deg, #07111f 0%, #040811 58%, #02050d 100%);
+    color: #f5fbff;
+    font-family: var(--font-ui);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  * {
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  ::selection {
+    background: rgba(94, 233, 255, 0.28);
+    color: white;
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8;
+  }
+
+  .button-primary {
+    @apply inline-flex min-h-12 touch-manipulation items-center justify-center rounded-full border border-cyan-300/40 bg-cyan-300/15 px-4 py-3 text-base font-medium text-cyan-50 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:px-5 sm:text-sm motion-safe:hover:scale-[1.01] hover:border-cyan-200/70 hover:bg-cyan-300/20;
+  }
+
+  .button-secondary {
+    @apply inline-flex min-h-12 touch-manipulation items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-3 text-base font-medium text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/55 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:px-5 sm:text-sm hover:border-white/20 hover:bg-white/10;
+  }
+
+  .button-danger {
+    @apply inline-flex min-h-12 touch-manipulation items-center justify-center rounded-full border border-rose-300/35 bg-rose-400/10 px-4 py-3 text-base font-medium text-rose-100 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200/55 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:px-5 sm:text-sm hover:border-rose-200/60 hover:bg-rose-400/20;
+  }
+
+  .input-shell {
+    @apply w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3.5 text-base text-white outline-none transition placeholder:text-white/35 focus:border-cyan-300/45 focus:ring-2 focus:ring-cyan-300/15 focus-visible:ring-cyan-200/45 sm:py-3 sm:text-sm;
+  }
+
+  .surface-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 26px 26px;
+  }
+
+  .eyebrow {
+    @apply text-[11px] uppercase tracking-[0.38em] text-cyan-200/70;
+  }
+
+  .number-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .signal-pill {
+    @apply inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.32em];
+  }
+
+  .signal-pill-live {
+    @apply border-cyan-300/45 bg-cyan-300/12 text-cyan-50 shadow-[0_10px_24px_rgba(34,211,238,0.14)];
+  }
+
+  .signal-pill-lime {
+    @apply border-lime-300/40 bg-lime-300/12 text-lime-100 shadow-[0_10px_24px_rgba(178,255,82,0.12)];
+  }
+
+  .signal-pill-amber {
+    @apply border-amber-300/45 bg-amber-300/12 text-amber-50 shadow-[0_10px_24px_rgba(255,190,85,0.12)];
+  }
+
+  .signal-card {
+    @apply rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(13,22,40,0.9),rgba(6,12,25,0.96))] p-4;
+  }
+
+  .arcade-screen {
+    @apply relative overflow-hidden rounded-[30px] border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(6,12,24,0.98),rgba(4,8,18,0.98))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.45)];
+  }
+
+  .arcade-screen::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, rgba(94, 233, 255, 0.12), transparent 12%),
+      repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 16px);
+    pointer-events: none;
+    opacity: 0.9;
+  }
+
+  .marquee-strip {
+    @apply overflow-hidden rounded-full border border-cyan-300/18 bg-slate-950/65 px-3 py-2 shadow-[0_16px_32px_rgba(0,0,0,0.24)];
+  }
+
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    gap: 0.75rem;
+    animation: marquee-drift 22s linear infinite;
+  }
+
+  .marquee-item {
+    @apply rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-200;
+  }
+
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+}
+
+@keyframes marquee-drift {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}

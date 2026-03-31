@@ -1,0 +1,9 @@
+.git
+.turbo
+node_modules
+**/node_modules
+apps/web/.next
+apps/game/dist
+packages/*/dist
+coverage
+*.log

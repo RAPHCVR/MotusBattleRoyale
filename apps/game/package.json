@@ -1,0 +1,33 @@
+{
+  "name": "@motus/game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "dev": "tsx watch src/index.ts",
+    "lint": "tsc -p tsconfig.json",
+    "start": "node --enable-source-maps dist/index.js",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@colyseus/auth": "^0.17.9",
+    "@colyseus/redis-driver": "^0.17.6",
+    "@colyseus/redis-presence": "^0.17.6",
+    "@colyseus/schema": "^4.0.19",
+    "@colyseus/ws-transport": "^0.17.5",
+    "@motus/dictionary": "workspace:*",
+    "@motus/game-core": "workspace:*",
+    "@motus/protocol": "workspace:*",
+    "colyseus": "^0.17.8",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "ioredis": "^5.8.2",
+    "jose": "^6.1.2",
+    "nanoid": "^5.1.6",
+    "pg": "^8.16.3",
+    "zod": "^4.1.12"
+  }
+}

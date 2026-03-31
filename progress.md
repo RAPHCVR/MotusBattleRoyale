@@ -1,0 +1,168 @@
+Original prompt: Dis moi que faire, pour effectuer, le meilleur Motus Like, Battle Royal, le but est de faire un site parfait, utilise la meilleure stack pour ça etc, pour que les gens se connectent au site que je vais heberger, puis puisse rentrer dans une room ou automatique avec matchmaking, et au bout d'un délai/que le maitre de partie valide, ou que la room est pleine, ça démarre et les gens doivent trouver le mot en premier avec scoring sur points, détection, mots invalides et un vrai feeling de jeu en ligne moderne.
+
+2026-03-19
+- Bootstrap greenfield started.
+- Target stack locked: Next.js web app + Colyseus game server + Better Auth + Postgres + Redis + Docker + Caddy + cloudflared.
+- Current focus: monorepo skeleton, infra topology, core shared packages, then auth/game flow.
+- Monorepo implemented: `apps/web`, `apps/game`, shared packages for dictionary, protocol, game-core and UI.
+- Better Auth guest -> account flow, passkey hooks, one-time token exchange and game ticket API are wired.
+- Colyseus public/private rooms, matchmaking tickets, scoring loop, eliminations, finalists and result persistence are implemented.
+- Local validation completed: workspace tests green, sequential workspace builds green, Docker images for `web` and `game` build successfully.
+- Docker core stack is up locally with `postgres`, `redis`, `game`, `web`, `caddy`; `http://localhost:3000` returns 200 and `http://localhost:2567/healthz` returns OK.
+- Cloudflared config flow fixed: template rendering now produces `infra/cloudflared/config.yml`, and `cloudflared tunnel ingress validate` passes on the rendered config.
+- Cloudflared config flow now supports both Docker-side origins (`caddy`) and host-side origins (`localhost:3000` / `localhost:2567`) so the repo works with either the preview container or a Windows `cloudflared.exe` service install.
+- Docker now forwards public frontend URLs into the web image build, so `NEXT_PUBLIC_*` and passkey settings can be rebuilt correctly for real hostnames instead of staying pinned to `localhost`.
+- Local `.env` has been provisioned for `play-dev.raphcvr.me` / `rt-dev.raphcvr.me`, the Docker stack has been recreated with those values, and public checks now succeed on both the web origin and the game `/healthz` endpoint through Cloudflare Tunnel.
+- Play page crash chain fixed in three steps: Better Auth client now resolves `/api/auth` against `window.location.origin`, the game ticket API now reads session state via the public Better Auth HTTP endpoint with cookies forwarded, and the protocol schema now matches the flat Colyseus 0.17 seat reservation returned by the server.
+- Remaining join issue after ticket creation was a Colyseus client/server version mismatch: frontend `colyseus.js@0.16` still expects the legacy nested `response.room.*` reservation shape, while the server returns the flat 0.17 reservation object. `PlayShell` now adapts the flat reservation into the legacy shape before `consumeSeatReservation()`.
+- Rebuilt and redeployed the web container after the adapter patch. Playwright validation on `https://play-dev.raphcvr.me/play` now succeeds: guest session creation works, clicking `Rejoindre la queue publique` transitions the UI into the connected queue/lobby state, and the right rail shows `WS Connected`.
+- Captured visual proof after the fix: `.playwright-cli/page-2026-03-19T17-45-30-386Z.png`.
+- Protocol test was still failing because Vitest was importing stale JS from `packages/protocol/src/index.js` instead of the TS source. The test now imports `../src/index.ts` explicitly, and `corepack pnpm --filter @motus/protocol test` passes again.
+- Remaining non-blocker: the web container still logs `next start` warning with `output: standalone`; functional for now, but it should be switched to `node .next/standalone/server.js` in a later cleanup pass.
+- Responsive audit completed on the public tunnel with Playwright at `390x844`. The main issues were horizontal compression on `/play`, hidden mobile navigation, unreadable badge/table layouts on small screens, and sub-16px inputs that are poor on mobile.
+- Shared UI primitives were updated for touch and small screens: `GlassPanel` now shrinks cleanly, `MetricBadge` stacks label/value on mobile, `SectionHeader` balances headings and stretches actions correctly, `WordTile` scales down without breaking the board, and global button/input classes now use larger tap targets plus `touch-action: manipulation`.
+- Root layout now exposes the main navigation on mobile as a 2x2 button grid instead of hiding it. `viewport` metadata for mobile was added, horizontal overflow is clipped globally, and the footer remains usable on narrow screens.
+- `/play` was refactored for mobile: min-width traps were removed, action grids collapse safely, the account card wraps long names/emails, auth inputs are wrapped in proper forms, the game board uses tighter gaps on phone, the keyboard buttons are smaller but still tappable, and the live rail/status panels now stack without overflow.
+- `/leaderboard` now uses dedicated mobile cards instead of crushing a 5-column table into a phone-width viewport. `/admin` checklist copy now uses styled inline code instead of raw backticks, and `/profile`/home got wrapping and spacing fixes.
+- Added `apps/web/src/app/icon.svg`, rebuilt the app, and verified browser console is now clean on the public hostname. The previous favicon 404 is gone.
+- Verified after the responsive pass: `corepack pnpm --filter @motus/web build`, `corepack pnpm --filter @motus/protocol test`, Docker rebuild/redeploy of `web`, mobile Playwright screenshots on `/`, `/play`, `/leaderboard`, `/admin`, and a real mobile join flow `guest -> queue publique` showing `WS Connected`.
+- Public/private minimum players are currently both set to `2` in `packages/protocol/src/index.ts`. Rebuilt the workspace, re-ran `corepack pnpm --filter @motus/protocol test`, rebuilt Docker images for `web` and `game`, and redeployed both containers successfully.
+- Post-redeploy checks green: `http://localhost:3000/play` -> `200`, `http://localhost:2567/healthz` -> OK JSON, `https://play-dev.raphcvr.me/play` -> `200`, `https://rt-dev.raphcvr.me/healthz` -> OK JSON.
+- Verified behavior after the min-player change:
+  - Public queue with 2 players already worked as designed: both clients land in the same room, `Players = 2`, phase becomes `COUNTDOWN`, and the 20s public timer starts automatically.
+  - Private room with 2 players did not auto-start when both clicked `Ready`; only the host button triggered the launch.
+- Fixed private-room readiness logic in `apps/game/src/rooms/BaseMotusRoom.ts`: when the room is private, has at least `PRIVATE_MIN_PLAYERS`, and all active players are `ready`, the room now auto-schedules the existing 5s countdown. If someone unreadies, the countdown is cancelled cleanly.
+- Rebuilt and redeployed the `game` container, then validated with two real Playwright sessions: `create private room -> join by code -> both click Ready -> room transitions to Round 1 for both clients`.
+
+2026-03-25
+- Dictionary package was split into a lightweight core export and a server-side word-bank export. `@motus/dictionary` now only carries normalization helpers into the client bundle, while `@motus/dictionary/word-bank` loads a real French word list plus a profanity blacklist for authoritative guess validation.
+- Added `french-wordlist` and `french-badwords-list`, filtered the bank down to 6 and 7-letter rounds, kept a curated solution pool, and exposed runtime stats. Current bank on `/admin`: `116` curated solutions, `39,463` allowed guesses, `578` blocked terms.
+- `normalizeWord()` now handles French ligatures correctly (`œ -> OE`, `æ -> AE`) in addition to accent stripping and punctuation cleanup.
+- Play input was refactored around lock-aware helpers in `apps/web/src/components/play-shell-helpers.ts`: the revealed letters are now auto-applied, never duplicated into the editable input, and clue reveals can remap the current draft without corrupting the guess.
+- Added unit coverage for the new lock-aware guess helpers (`apps/web/src/components/play-shell-helpers.test.ts`) and expanded dictionary tests to cover ligatures plus real word-bank loading.
+- `/play` live round UI was reworked again: the board is constrained to a sane max width, the input no longer collapses on desktop, the action buttons stack safely, and the on-screen keyboard now uses fixed grids instead of wrapping unpredictably.
+- The active room side rail now stays stacked below the board until very wide screens (`2xl`), which removes the cramped mid-desktop layout seen previously.
+- `/admin` now documents and displays the live word-bank stats so the current dictionary behavior is visible from the app itself.
+- Source hygiene cleanup: removed stale generated JS / d.ts files from package `src/` folders because they were interfering with Vitest resolution again.
+- Validation after the changes:
+  - `corepack pnpm --recursive --if-present test` passed.
+  - `corepack pnpm --recursive --workspace-concurrency=1 --if-present build` passed.
+  - `docker compose build web game` passed.
+  - `docker compose up -d --force-recreate web game` passed.
+  - `http://localhost:3000/play` and `https://play-dev.raphcvr.me/play` both returned `200`.
+  - `http://localhost:2567/healthz` and `https://rt-dev.raphcvr.me/healthz` both returned healthy JSON.
+  - Playwright visual audit passed on the public hostname for `/`, `/play`, `/leaderboard`, and `/admin` across phone/tablet/desktop-sized windows, with console logs remaining empty on audited sessions.
+- Feedback UX pass completed for live rounds:
+  - Round timers were lengthened in `packages/game-core` to `70s, 70s, 65s, 60s, 50s, 45s, 35s` so the early game stops feeling rushed while later rounds still accelerate.
+  - Added an explicit timer regression test in `packages/game-core/tests/game-core.test.ts` so future tuning cannot silently shorten the match again.
+  - Tile and keyboard feedback were clarified: stronger lime for correct letters, stronger amber for present letters, darker slate for eliminated letters, and a persistent in-round legend explaining cyan/green/amber/gray semantics directly next to the board.
+  - Keyboard state is now derived from the authoritative board snapshot with precedence (`correct > present > hint > absent`), and only letters proven absent are blocked from input. This avoids bad UX around duplicate letters while still preventing obviously dead keys from being typed or tapped.
+  - Input assistant copy was rewritten to explain the lock system and the meaning of gray keys. Keyboard buttons now expose accessible state labels such as `bonne lettre bien placée`, `bonne lettre mal placée`, `lettre révélée et verrouillée`, and `lettre éliminée`.
+  - Mobile/small-screen round start was refined: the native text input is no longer auto-focused on touch devices or narrow layouts, which avoids the disruptive phone keyboard popup and scroll jump when a round begins.
+- Validation after the feedback/timer pass:
+  - `corepack pnpm --recursive --if-present test` passed after adjusting the helper fixtures to cover mixed absent/present letters correctly.
+  - `corepack pnpm --recursive --workspace-concurrency=1 --if-present build` passed.
+  - `docker compose build web game` and `docker compose up -d --force-recreate web game` passed after the timer pass; a second targeted `docker compose build web && docker compose up -d --force-recreate web` passed after the mobile auto-focus refinement.
+  - Public health remained green throughout: `https://play-dev.raphcvr.me/play` returned `200` and `https://rt-dev.raphcvr.me/healthz` returned healthy JSON after redeploy.
+  - Real Playwright browser sessions were used again on the public tunnel with two isolated users in a private room. Verified states included `Lobby -> Ready -> Round 1`, a longer visible round timer (`00:55` on the refreshed build), the new feedback legend, blocked keyboard letters after a valid guess, and clean browser consoles on both desktop and mobile-sized sessions.
+  - Final mobile-focus check passed on a freshly reopened narrow session after the last redeploy: the page remained active at round start while the textbox was no longer auto-focused, confirming the `window.innerWidth < 768` safeguard works as intended on the shipped bundle.
+- Visual rollback and redesign pass after negative review:
+  - The previous "arcade" treatment was judged too noisy and visually off. Direction changed from loud dashboard/strip styling to a cleaner premium-arena look with fewer gimmicks and stronger semantic contrast.
+  - `WordTile` was redesigned around status structure instead of hue alone: solid lime fill for `correct`, dark amber outlined treatment for `present`, textured slate for `absent`, cyan locked treatment for `hint`, plus small corner markers and top rails to differentiate states even in peripheral vision.
+  - The live keyboard in `PlayShell` now mirrors the tile system with matching top rails, markers, dashed outlines for `present`, and textured dark keys for `absent`. Copy around the legend/input assistant/ruleset was tightened to describe the exact visual grammar (`vert plein`, `ambre en contour`, `gris strié`).
+  - Global UI primitives got a cleanup pass: stronger focus-visible rings on buttons/inputs, reusable `signal-pill`, `signal-card`, `arcade-screen`, and `marquee` utility classes, and reduced-motion support for the decorative marquee.
+  - The homepage was rebuilt instead of incrementally patched: cleaner hero, restrained signal pills, stronger typography, a single polished live-preview panel, and less clutter on mobile. The decorative marquee is now hidden on small screens because it looked broken/noisy there.
+  - I checked current public UI ecosystem references before locking the direction: shadcn/ui still serves well as an accessible component-code baseline, Lucide remains a lightweight tree-shakeable icon system, and Magic UI is useful mainly as a landing-page inspiration source rather than a good fit for core in-game surfaces. I did not bolt one of these kits into the runtime; the game still uses local components tailored to the match UI.
+- Validation after the redesign pass:
+  - `corepack pnpm --recursive --if-present test` passed.
+  - `corepack pnpm --filter @motus/web test` passed after the mobile marquee cleanup.
+  - `corepack pnpm --recursive --workspace-concurrency=1 --if-present build` passed after the redesign.
+  - `docker compose build web && docker compose up -d --force-recreate web` passed twice during the redesign iterations.
+  - Public checks after the final redeploy: `https://play-dev.raphcvr.me/` -> `200`, `https://play-dev.raphcvr.me/play` -> `200`, `https://rt-dev.raphcvr.me/healthz` -> healthy JSON.
+ - Playwright screenshots were reviewed for the redesigned homepage and the live round UI. The last accepted captures for this pass are:
+    - Home desktop: `.playwright-cli/page-2026-03-25T16-08-09-969Z.png`
+    - Home mobile before the final marquee mobile cleanup: `.playwright-cli/page-2026-03-25T16-08-04-580Z.png`
+    - Live round desktop with the redesigned legend and keyboard language: `.playwright-cli/page-2026-03-25T16-14-14-542Z.png`
+    - Live round mobile with the redesigned legend cards: `.playwright-cli/page-2026-03-25T16-14-06-792Z.png`
+
+2026-03-26
+- Fresh audit pass completed against the public tunnel on `play-dev.raphcvr.me` / `rt-dev.raphcvr.me`.
+- Workspace validation re-run:
+  - `corepack pnpm --recursive --if-present test` passed.
+  - `corepack pnpm --recursive --workspace-concurrency=1 --if-present build` passed.
+  - Public checks passed: `/` -> `200`, `/play` -> `200`, `/healthz` -> healthy JSON.
+- Fresh Playwright audits on the live deployment passed with clean consoles on:
+  - home desktop: `.playwright-cli/page-2026-03-26T12-33-33-357Z.png`
+  - home mobile: `.playwright-cli/page-2026-03-26T12-33-28-022Z.png`
+  - play desktop: `.playwright-cli/page-2026-03-26T12-35-45-852Z.png`
+  - play mobile before guest auth: `.playwright-cli/page-2026-03-26T12-35-39-621Z.png`
+  - play mobile after `Continuer en invité` then `Rejoindre la queue publique`: `.playwright-cli/page-2026-03-26T12-38-06-210Z.png`
+  - admin mobile: `.playwright-cli/page-2026-03-26T12-40-18-403Z.png`
+  - leaderboard mobile: `.playwright-cli/page-2026-03-26T12-40-18-376Z.png`
+- No new visual/touch regression was reproduced during the audit. Mobile tap interactions on `/play` worked in a real browser session: guest auth succeeded, public queue join succeeded, websocket status reached `Connected`.
+- Remaining technical debt after the audit:
+  - `compose.yml` still exposes `postgres`, `redis`, `game`, and `web` ports on the host, and the compose fallback for `POSTGRES_PASSWORD` remains `motus`. Fine for local iteration, but not aligned with the earlier "no inbound ports" production target.
+  - `apps/game` still has no first-party automated tests covering room lifecycle/auth/matchmaking despite complex logic living in `BaseMotusRoom.ts`.
+  - `apps/web/Dockerfile` still starts the app through `pnpm --filter @motus/web start` instead of the Next standalone server entrypoint, so the known packaging warning remains.
+
+2026-03-26 (closing pass)
+- Closed the three remaining audit items.
+- Security / topology:
+  - `compose.yml` now binds published ports to `127.0.0.1` only instead of all interfaces.
+  - Compose secrets are now required explicitly for `POSTGRES_PASSWORD`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `GAME_TOKEN_SECRET`, and `GAME_SERVICE_KEY` instead of silently falling back to weak dev defaults.
+  - Local `.env` was rotated away from `motus` for Postgres and the live database user password was updated in-container with `ALTER USER`.
+  - `.env.example` and `README.md` were updated to reflect explicit secret requirements and loopback-only publishing.
+- Runtime packaging:
+  - `apps/web/package.json` now starts the standalone Next server directly.
+  - `apps/web/Dockerfile` was rewritten as a builder/runner multi-stage image that serves `apps/web/server.js` from the standalone output.
+  - The standalone image initially regressed on server routes because `@motus/dictionary` resolves `french-wordlist` and `french-badwords-list` at runtime. The final image now copies those two datasets into the runner so `/admin`, `/profile`, etc. resolve correctly again.
+  - Final web runtime logs no longer show the `next start` + `output: standalone` warning.
+- Game-server coverage:
+  - Added `apps/game/tests/base-motus-room.test.ts`.
+  - The new test suite covers public auto-countdown at min players, reconnect deduplication, private room-code enforcement, private ready/unready countdown behavior, host-triggered private countdown, and transition into round state with room locking.
+  - `@motus/game` no longer passes on "no tests"; it now has real coverage for the high-risk room lifecycle logic.
+- Final validation after all fixes:
+  - `corepack pnpm --recursive --if-present test` passed.
+  - `corepack pnpm --recursive --workspace-concurrency=1 --if-present build` passed.
+  - `docker compose build web` passed on the final standalone runner image.
+  - `docker compose up -d --force-recreate postgres redis game web caddy` passed.
+  - Local health checks passed: `http://localhost:3000/` -> `200`, `http://localhost:2567/healthz` -> `200`.
+  - Public health checks passed: `https://play-dev.raphcvr.me/` -> `200`, `/play` -> `200`, `/admin` -> `200`, `/profile` -> `200`, `https://rt-dev.raphcvr.me/healthz` -> healthy JSON.
+  - Fresh Playwright checks after the final runtime fix were clean:
+    - home mobile: `.playwright-cli/page-2026-03-26T13-55-42-511Z.png`
+    - play mobile pre-auth: `.playwright-cli/page-2026-03-26T13-55-42-898Z.png`
+    - play mobile after `Continuer en invité` -> `Rejoindre la queue publique`: `.playwright-cli/page-2026-03-26T13-58-38-040Z.png`
+    - matching console logs after the final pass were empty (`console-2026-03-26T13-55-48-093Z.log`, `console-2026-03-26T13-55-42-488Z.log`, `console-2026-03-26T13-58-40-623Z.log`).
+- Outstanding note after the closing pass:
+  - I no longer have a concrete bug or blocking quality issue to report from the current shipped state. Remaining future work would now be feature expansion or stricter production hardening beyond the current scope, not cleanup of obvious flaws in the existing app.
+
+2026-03-26 (tile/icon cleanup)
+- Visual cleanup pass after direct feedback that the tile/key status language still looked homemade and noisy.
+- Replaced the previous decorative tile treatment with a simpler word-game visual system:
+  - `correct` = solid lime tile
+  - `present` = solid amber tile
+  - `hint` = solid cyan locked tile
+  - `absent` = solid slate tile
+  - `pending` = subtle cyan outline only
+- `WordTile` no longer carries per-cell decorative chips/rails. The icon pack (`lucide-react`) is still used, but only where it actually improves comprehension: legend badges and keyboard corner markers.
+- Live keyboard was simplified to match the tiles directly instead of layering extra bars and micro-decorations. Unused keys stay neutral, resolved keys use the same solid fills as the board, and the corner icon badge now carries the only extra semantic marker.
+- Gameplay copy was rewritten for clarity and consistency:
+  - Ruleset / helper / legend now all use the same plain language: `vert`, `ambre`, `cyan`, `ardoise`.
+  - Removed the old `contour ambre`, `gris strié`, `check/slash/anneau` phrasing from the visible UI because it was adding noise instead of helping.
+- Homepage tone was cleaned up in the same pass:
+  - removed the marquee strip
+  - changed the hero copy away from the old "arcade gimmick" direction
+  - updated the home preview/legend so it mirrors the shipped in-game color language exactly
+- Validation after the cleanup:
+  - `corepack pnpm --filter @motus/ui build` passed.
+  - `corepack pnpm --filter @motus/web test` passed.
+  - `corepack pnpm --filter @motus/web build` passed.
+  - `docker compose build web` passed.
+  - `docker compose up -d --force-recreate web caddy` passed.
+  - Fresh Playwright screenshots after the redeploy were reviewed:
+    - home desktop: `.playwright-cli/page-2026-03-26T14-33-05-321Z.png`
+    - play desktop live room: `.playwright-cli/page-2026-03-26T14-37-17-527Z.png`
+    - play mobile live room: `.playwright-cli/page-2026-03-26T14-37-22-376Z.png`
+  - Matching browser console logs remained clean:
+    - `.playwright-cli/console-2026-03-26T14-33-11-447Z.log`
+    - `.playwright-cli/console-2026-03-26T14-37-16-976Z.log`

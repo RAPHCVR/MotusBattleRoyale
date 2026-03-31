@@ -1,0 +1,36 @@
+{
+  "name": "@motus/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "dev": "next dev --webpack --port 3000",
+    "lint": "tsc -p tsconfig.json",
+    "start": "node ./.next/standalone/apps/web/server.js",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@better-auth/passkey": "^1.2.2",
+    "@motus/dictionary": "workspace:*",
+    "@motus/game-core": "workspace:*",
+    "@motus/protocol": "workspace:*",
+    "@motus/ui": "workspace:*",
+    "better-auth": "^1.5.5",
+    "clsx": "^2.1.1",
+    "colyseus.js": "^0.16.18",
+    "jose": "^6.1.2",
+    "kysely": "^0.28.8",
+    "nanoid": "^5.1.6",
+    "next": "^16.2.0",
+    "pg": "^8.16.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.17",
+    "tailwindcss": "^4.1.17"
+  }
+}

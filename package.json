@@ -1,0 +1,35 @@
+{
+  "name": "motus-royale",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.11.1",
+  "scripts": {
+    "build": "corepack pnpm --recursive --workspace-concurrency=1 --if-present build",
+    "cloudflared:render": "node ./scripts/render-cloudflared-config.mjs",
+    "cloudflared:routes": "node ./scripts/provision-cloudflared-routes.mjs",
+    "cloudflared:validate": "cloudflared --config infra/cloudflared/config.yml tunnel ingress validate",
+    "dev": "node ./scripts/dev.mjs",
+    "dev:web": "corepack pnpm --filter @motus/web dev",
+    "dev:game": "corepack pnpm --filter @motus/game dev",
+    "docker:build": "docker compose build web game",
+    "docker:down": "docker compose down",
+    "docker:up": "docker compose up -d postgres redis game web caddy",
+    "lint": "corepack pnpm --recursive --if-present lint",
+    "test": "corepack pnpm --recursive --if-present test",
+    "typecheck": "corepack pnpm --recursive --if-present typecheck",
+    "format": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.8",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.8"
+  }
+}

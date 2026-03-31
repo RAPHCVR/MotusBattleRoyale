@@ -1,0 +1,17 @@
+{
+  auto_https off
+}
+
+:80 {
+  @play host localhost play-dev.{$BASE_DOMAIN} play.{$BASE_DOMAIN}
+  handle @play {
+    reverse_proxy web:3000
+  }
+
+  @rt host rt-dev.{$BASE_DOMAIN} rt.{$BASE_DOMAIN}
+  handle @rt {
+    reverse_proxy game:2567
+  }
+
+  respond "unknown host" 404
+}

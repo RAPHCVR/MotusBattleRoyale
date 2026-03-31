@@ -1,0 +1,129 @@
+CREATE TABLE IF NOT EXISTS "user" (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  "emailVerified" BOOLEAN NOT NULL DEFAULT FALSE,
+  image TEXT,
+  "isAnonymous" BOOLEAN NOT NULL DEFAULT FALSE,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS session (
+  id TEXT PRIMARY KEY,
+  "expiresAt" TIMESTAMPTZ NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "ipAddress" TEXT,
+  "userAgent" TEXT,
+  "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_user_id ON session("userId");
+
+CREATE TABLE IF NOT EXISTS account (
+  id TEXT PRIMARY KEY,
+  "accountId" TEXT NOT NULL,
+  "providerId" TEXT NOT NULL,
+  "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  "accessToken" TEXT,
+  "refreshToken" TEXT,
+  "idToken" TEXT,
+  "accessTokenExpiresAt" TIMESTAMPTZ,
+  "refreshTokenExpiresAt" TIMESTAMPTZ,
+  scope TEXT,
+  password TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE ("providerId", "accountId")
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_user_id ON account("userId");
+
+CREATE TABLE IF NOT EXISTS verification (
+  id TEXT PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  value TEXT NOT NULL,
+  "expiresAt" TIMESTAMPTZ NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_verification_identifier ON verification(identifier);
+
+CREATE TABLE IF NOT EXISTS passkey (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  "publicKey" TEXT NOT NULL,
+  "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  "credentialID" TEXT NOT NULL,
+  counter INTEGER NOT NULL,
+  "deviceType" TEXT NOT NULL,
+  "backedUp" BOOLEAN NOT NULL,
+  transports TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  aaguid TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_user_id ON passkey("userId");
+CREATE INDEX IF NOT EXISTS idx_passkey_credential_id ON passkey("credentialID");
+
+CREATE TABLE IF NOT EXISTS player_profile (
+  user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+  display_name TEXT NOT NULL,
+  avatar_seed TEXT NOT NULL,
+  mmr INTEGER NOT NULL DEFAULT 1200,
+  wins INTEGER NOT NULL DEFAULT 0,
+  matches_played INTEGER NOT NULL DEFAULT 0,
+  best_finish INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "match" (
+  id TEXT PRIMARY KEY,
+  room_kind TEXT NOT NULL,
+  room_code TEXT,
+  seed TEXT NOT NULL,
+  started_at TIMESTAMPTZ NOT NULL,
+  ended_at TIMESTAMPTZ,
+  winner_user_id TEXT REFERENCES "user"(id) ON DELETE SET NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS match_player (
+  match_id TEXT NOT NULL REFERENCES "match"(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  display_name TEXT NOT NULL,
+  avatar_seed TEXT NOT NULL,
+  placement INTEGER NOT NULL,
+  score INTEGER NOT NULL,
+  solved_rounds INTEGER NOT NULL DEFAULT 0,
+  clue_used BOOLEAN NOT NULL DEFAULT FALSE,
+  mmr_before INTEGER NOT NULL,
+  mmr_after INTEGER NOT NULL,
+  PRIMARY KEY (match_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS round_result (
+  id BIGSERIAL PRIMARY KEY,
+  match_id TEXT NOT NULL REFERENCES "match"(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  round_index INTEGER NOT NULL,
+  solution TEXT NOT NULL,
+  solved BOOLEAN NOT NULL,
+  attempts_used INTEGER NOT NULL,
+  score_delta INTEGER NOT NULL,
+  modifier TEXT NOT NULL,
+  bounty_letter TEXT,
+  guess_history JSONB NOT NULL DEFAULT '[]'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS sanction (
+  id BIGSERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ
+);
