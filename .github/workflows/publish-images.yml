@@ -19,7 +19,6 @@ jobs:
       contents: read
       packages: write
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
       NEXT_PUBLIC_GAME_WS_URL: ${{ vars.NEXT_PUBLIC_GAME_WS_URL }}
       PASSKEY_RP_ID: ${{ vars.PASSKEY_RP_ID }}
