@@ -217,6 +217,8 @@ export function PlayShell() {
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const [viewportOffsetTop, setViewportOffsetTop] = useState(0);
+  const [viewportInsetBottom, setViewportInsetBottom] = useState(0);
 
   const roomRef = useRef<Room | null>(null);
   const clientRef = useRef<Client | null>(null);
@@ -321,6 +323,7 @@ export function PlayShell() {
   const fullscreenScrollable = fullscreenActive && !isLiveRound;
   const fullscreenButtonLabel = fullscreenActive ? (prefersTouchInput ? "Quitter" : "Quitter le plein écran") : "Plein écran";
   const stickyTouchDock = isLiveRound && prefersTouchInput && !fullscreenActive;
+  const nativeKeyboardInset = prefersTouchInput ? viewportInsetBottom : 0;
   const roomCodeLabel = roomSnapshot?.roomCode ?? "Public";
   const matchInfoTitle =
     roomPhase === "results"
@@ -407,7 +410,8 @@ export function PlayShell() {
         : "max(22rem, min(31rem, calc(100dvh - 21rem)))"
     : "34rem";
   const virtualKeyboardMaxWidth = compactTouchKeyboardVisible ? "min(100%, 19rem)" : compactTouchRound ? "min(100%, 20rem)" : compactDesktopKeyboard ? "min(100%, 24rem)" : "34rem";
-  const mobileStickyDockSpacing = stickyTouchDock ? liveDockHeight + 12 : 0;
+  const mobileStickyDockSpacing = stickyTouchDock ? liveDockHeight + nativeKeyboardInset + 12 : 0;
+  const stickyTouchDockOffset = stickyTouchDock ? nativeKeyboardInset : 0;
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 250);
@@ -419,10 +423,15 @@ export function PlayShell() {
 
     const syncInputMode = () => {
       const prefersTouch = mediaQuery.matches || window.innerWidth < 768;
-      const visualViewportHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
+      const visualViewport = window.visualViewport;
+      const visualViewportHeight = Math.round(visualViewport?.height ?? window.innerHeight);
+      const visualViewportOffsetTop = Math.max(0, Math.round(visualViewport?.offsetTop ?? 0));
+      const visualViewportInsetBottom = Math.max(0, window.innerHeight - visualViewportHeight - visualViewportOffsetTop);
 
       setPrefersTouchInput(prefersTouch);
       setViewportHeight(visualViewportHeight);
+      setViewportOffsetTop(visualViewportOffsetTop);
+      setViewportInsetBottom(visualViewportInsetBottom);
 
       if (prefersTouch) {
         setShowDesktopKeyboard(false);
@@ -450,7 +459,7 @@ export function PlayShell() {
   useEffect(() => {
     const liveDockElement = liveDockRef.current;
 
-    if (!liveDockElement || !isLiveRound) {
+    if (!liveDockElement || !stickyTouchDock) {
       setLiveDockHeight(0);
       return;
     }
@@ -474,7 +483,7 @@ export function PlayShell() {
     return () => {
       observer.disconnect();
     };
-  }, [isLiveRound, fullscreenActive, prefersTouchInput, showTouchKeyboard, showDesktopKeyboard, compactTouchKeyboardVisible, viewportHeight]);
+  }, [stickyTouchDock]);
 
   useEffect(() => {
     const canFullscreen = Boolean(document.fullscreenEnabled && playSurfaceRef.current?.requestFullscreen);
@@ -535,6 +544,27 @@ export function PlayShell() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isPseudoFullscreen]);
+
+  useEffect(() => {
+    if (!prefersTouchInput || !isInputFocused || showTouchKeyboard) {
+      return;
+    }
+
+    const input = guessInputRef.current;
+
+    if (!input) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      input.scrollIntoView({
+        block: fullscreenActive ? "center" : "nearest",
+        inline: "nearest"
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [fullscreenActive, isInputFocused, prefersTouchInput, showTouchKeyboard, viewportHeight, viewportInsetBottom]);
 
   useEffect(() => {
     if (!sessionUser && roomRef.current) {
@@ -629,7 +659,9 @@ export function PlayShell() {
       return;
     }
 
-    if (!document.fullscreenEnabled || !playSurfaceRef.current.requestFullscreen || prefersTouchInput) {
+    const canUseNativeFullscreen = Boolean(document.fullscreenEnabled && playSurfaceRef.current.requestFullscreen);
+
+    if (!canUseNativeFullscreen) {
       setIsPseudoFullscreen((current) => !current);
       return;
     }
@@ -638,9 +670,17 @@ export function PlayShell() {
       if (document.fullscreenElement === playSurfaceRef.current) {
         await document.exitFullscreen();
       } else {
+        if (isPseudoFullscreen) {
+          setIsPseudoFullscreen(false);
+        }
         await playSurfaceRef.current.requestFullscreen();
       }
     } catch {
+      if (prefersTouchInput) {
+        setIsPseudoFullscreen((current) => !current);
+        return;
+      }
+
       setStatusMessage("Impossible de basculer en plein écran.");
     }
   }
@@ -1015,9 +1055,17 @@ export function PlayShell() {
       className={clsx(
         "flex min-h-0 flex-1 flex-col",
         isLiveRound && "h-full overflow-hidden",
-        fullscreenActive && "fixed inset-0 z-[80] h-[100dvh] w-screen bg-[#040811]",
+        fullscreenActive && "fixed inset-x-0 top-0 z-[80] w-screen bg-[#040811]",
         fullscreenScrollable && "overflow-y-auto"
       )}
+      style={
+        fullscreenActive
+          ? {
+              top: `${viewportOffsetTop}px`,
+              height: viewportHeight > 0 ? `${viewportHeight}px` : undefined
+            }
+          : undefined
+      }
     >
       <GlassPanel
         className={clsx(
@@ -1480,7 +1528,10 @@ export function PlayShell() {
                               ? "sticky bottom-0 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
                               : "mt-auto pt-2"
                         )}
-                        style={{ maxWidth: liveDockMaxWidth }}
+                        style={{
+                          maxWidth: liveDockMaxWidth,
+                          ...(stickyTouchDockOffset ? { bottom: `${stickyTouchDockOffset}px` } : undefined)
+                        }}
                       >
                         <div
                           className={clsx(
@@ -1799,9 +1850,9 @@ export function PlayShell() {
 
                     <div className="mt-5 grid gap-3 sm:grid-cols-3">
                       {matchInfoStats.map((item) => (
-                        <div key={item.label} className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3">
-                          <p className="eyebrow">{item.label}</p>
-                          <p className="mt-2 text-lg font-medium text-white">{item.value}</p>
+                        <div key={item.label} className="min-w-0 rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                          <p className="eyebrow truncate">{item.label}</p>
+                          <p className="mt-2 break-words text-base font-medium leading-snug text-white sm:text-lg">{item.value}</p>
                         </div>
                       ))}
                     </div>
