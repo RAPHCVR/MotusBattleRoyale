@@ -14,9 +14,9 @@ export default async function ProfilePage() {
   return (
     <div className="page-shell space-y-6 py-8 md:py-10">
       <SectionHeader
-        eyebrow="Player Profile"
+        eyebrow="Profil"
         title="Compte, stats et identité de jeu"
-        body="Le profil s’aligne sur l’auth et le backend de match pour garder un display name, un seed avatar et un MMR cohérents."
+        body="Le profil regroupe ton nom affiché, ton seed avatar et tes stats pour garder une identité cohérente entre le site et les parties."
       />
 
       {!session || !profile ? (
@@ -44,18 +44,18 @@ export default async function ProfilePage() {
               <h3 className="mt-3 break-words font-display text-2xl text-white">{session.user.name}</h3>
               <p className="mt-2 break-all text-sm text-slate-300">{session.user.email}</p>
               <p className="mt-4 text-sm leading-6 text-slate-400">
-                Les actions de connexion, upgrade invité → compte et ajout de passkey sont pilotées depuis la page de jeu
-                pour garder une seule boucle UI.
+                Les actions de connexion, de conversion invité → compte et d’ajout de passkey se font depuis la page de
+                jeu pour garder une seule boucle claire.
               </p>
             </div>
 
             <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-5">
-              <p className="eyebrow">Game Identity</p>
+              <p className="eyebrow">Identité de jeu</p>
               <h3 className="mt-3 break-all font-display text-2xl text-white">{profile.avatarSeed}</h3>
               <p className="mt-2 text-sm text-slate-300">{profile.matchesPlayed} matchs enregistrés</p>
               <p className="mt-4 text-sm leading-6 text-slate-400">
-                Le seed avatar et le display name sont stockés côté backend et réutilisés par le serveur de jeu pour les
-                tickets et les classements.
+                Le seed avatar et le nom affiché sont stockés côté backend puis réutilisés par le serveur de jeu pour les
+                tickets et le classement.
               </p>
             </div>
           </div>

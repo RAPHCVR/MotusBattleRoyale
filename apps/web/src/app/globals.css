@@ -1,3 +1,5 @@
+@import "@fontsource-variable/instrument-sans";
+@import "@fontsource-variable/sora";
 @import "tailwindcss";
 @source "../../../packages/ui/src";
 

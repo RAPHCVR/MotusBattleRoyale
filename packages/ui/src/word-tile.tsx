@@ -50,13 +50,17 @@ export function FeedbackToneIcon(props: { tone: Exclude<WordTileTone, "idle" | "
   return <Lock {...iconProps} />;
 }
 
-export function WordTile(props: { letter?: string; state?: GuessTileState; hint?: boolean }) {
+export function WordTile(props: { letter?: string; state?: GuessTileState; hint?: boolean; compact?: boolean; dense?: boolean }) {
   const tone = resolveWordTileTone(props);
 
   return (
     <div
       className={clsx(
-        "relative isolate flex aspect-square min-h-10 items-center justify-center overflow-hidden rounded-xl border text-center font-display text-xl font-semibold uppercase tracking-[0.12em] transition sm:min-h-12 sm:rounded-2xl sm:text-2xl sm:tracking-[0.18em]",
+        props.compact
+          ? "relative isolate flex aspect-square min-h-7 items-center justify-center overflow-hidden rounded-lg border text-center font-display text-[0.95rem] font-semibold uppercase tracking-[0.12em] transition sm:min-h-8 sm:text-[1rem]"
+          : props.dense
+            ? "relative isolate flex aspect-square min-h-8 items-center justify-center overflow-hidden rounded-[0.95rem] border text-center font-display text-[1.05rem] font-semibold uppercase tracking-[0.12em] transition sm:min-h-9 sm:rounded-[1.1rem] sm:text-[1.2rem] sm:tracking-[0.16em]"
+          : "relative isolate flex aspect-square min-h-10 items-center justify-center overflow-hidden rounded-xl border text-center font-display text-xl font-semibold uppercase tracking-[0.12em] transition sm:min-h-12 sm:rounded-2xl sm:text-2xl sm:tracking-[0.18em]",
         tone === "correct" && "border-lime-200/90 bg-lime-300 text-slate-950 shadow-[0_16px_28px_rgba(178,255,82,0.18)]",
         tone === "present" && "border-amber-200/90 bg-amber-300 text-slate-950 shadow-[0_14px_26px_rgba(255,190,85,0.16)]",
         tone === "absent" && "border-slate-700/90 bg-slate-800 text-slate-100 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]",

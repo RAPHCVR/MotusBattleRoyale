@@ -1,7 +1,17 @@
-import { createAvatarSeed, sanitizeDisplayName } from "@motus/game-core";
+import {
+  createAvatarSeed,
+  sanitizeDisplayName,
+} from "@motus/game-core";
 import type { RoomKind, RoundModifier } from "@motus/protocol";
+import type { PoolClient } from "pg";
 
 import { pool } from "./db.js";
+import { env } from "./env.js";
+import {
+  isLocalDatabaseConnectionError,
+  recordLocalDevMatchResults,
+  upsertLocalDevPlayerProfile
+} from "./local-dev-store.js";
 
 export interface StoredPlayerProfile {
   userId: string;
@@ -37,64 +47,85 @@ export interface PersistedPlayerResult {
 }
 
 export async function getOrCreatePlayerProfile(userId: string, fallbackName: string): Promise<StoredPlayerProfile> {
-  const existing = await pool.query<{
-    user_id: string;
-    display_name: string;
-    avatar_seed: string;
-    mmr: number;
-    wins: number;
-    matches_played: number;
-  }>(
-    `
-      SELECT user_id, display_name, avatar_seed, mmr, wins, matches_played
-      FROM player_profile
-      WHERE user_id = $1
-    `,
-    [userId]
-  );
+  const displayName = sanitizeDisplayName(fallbackName, "Guest Nova");
+  const avatarSeed = createAvatarSeed(userId);
 
-  if (existing.rowCount) {
-    const row = existing.rows[0];
+  try {
+    const existing = await pool.query<{
+      user_id: string;
+      display_name: string;
+      avatar_seed: string;
+      mmr: number;
+      wins: number;
+      matches_played: number;
+    }>(
+      `
+        SELECT user_id, display_name, avatar_seed, mmr, wins, matches_played
+        FROM player_profile
+        WHERE user_id = $1
+      `,
+      [userId]
+    );
+
+    if (existing.rowCount) {
+      const row = existing.rows[0];
+      return {
+        userId: row.user_id,
+        displayName: sanitizeDisplayName(row.display_name, fallbackName),
+        avatarSeed: row.avatar_seed,
+        mmr: row.mmr,
+        wins: row.wins,
+        matchesPlayed: row.matches_played
+      };
+    }
+
+    const created = await pool.query<{
+      user_id: string;
+      display_name: string;
+      avatar_seed: string;
+      mmr: number;
+      wins: number;
+      matches_played: number;
+    }>(
+      `
+        INSERT INTO player_profile (user_id, display_name, avatar_seed)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id)
+        DO UPDATE SET display_name = EXCLUDED.display_name, avatar_seed = EXCLUDED.avatar_seed, updated_at = NOW()
+        RETURNING user_id, display_name, avatar_seed, mmr, wins, matches_played
+      `,
+      [userId, displayName, avatarSeed]
+    );
+
+    const row = created.rows[0];
     return {
       userId: row.user_id,
-      displayName: sanitizeDisplayName(row.display_name, fallbackName),
+      displayName: row.display_name,
       avatarSeed: row.avatar_seed,
       mmr: row.mmr,
       wins: row.wins,
       matchesPlayed: row.matches_played
     };
+  } catch (error) {
+    if (env.LOCAL_STORAGE_FALLBACK_ENABLED && isLocalDatabaseConnectionError(error)) {
+      const profile = await upsertLocalDevPlayerProfile({
+        userId,
+        displayName,
+        avatarSeed
+      });
+
+      return {
+        userId: profile.userId,
+        displayName: profile.displayName,
+        avatarSeed: profile.avatarSeed,
+        mmr: profile.mmr,
+        wins: profile.wins,
+        matchesPlayed: profile.matchesPlayed
+      };
+    }
+
+    throw error;
   }
-
-  const displayName = sanitizeDisplayName(fallbackName, "Guest Nova");
-  const avatarSeed = createAvatarSeed(userId);
-
-  const created = await pool.query<{
-    user_id: string;
-    display_name: string;
-    avatar_seed: string;
-    mmr: number;
-    wins: number;
-    matches_played: number;
-  }>(
-    `
-      INSERT INTO player_profile (user_id, display_name, avatar_seed)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id)
-      DO UPDATE SET display_name = EXCLUDED.display_name, avatar_seed = EXCLUDED.avatar_seed, updated_at = NOW()
-      RETURNING user_id, display_name, avatar_seed, mmr, wins, matches_played
-    `,
-    [userId, displayName, avatarSeed]
-  );
-
-  const row = created.rows[0];
-  return {
-    userId: row.user_id,
-    displayName: row.display_name,
-    avatarSeed: row.avatar_seed,
-    mmr: row.mmr,
-    wins: row.wins,
-    matchesPlayed: row.matches_played
-  };
 }
 
 export async function persistMatchResult(input: {
@@ -108,9 +139,10 @@ export async function persistMatchResult(input: {
   metadata: Record<string, unknown>;
   players: PersistedPlayerResult[];
 }): Promise<void> {
-  const client = await pool.connect();
-
   try {
+    const client: PoolClient = await pool.connect();
+
+    try {
     await client.query("BEGIN");
 
     await client.query(
@@ -225,10 +257,26 @@ export async function persistMatchResult(input: {
     }
 
     await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (env.LOCAL_STORAGE_FALLBACK_ENABLED && isLocalDatabaseConnectionError(error)) {
+      await recordLocalDevMatchResults(
+        input.players.map((player) => ({
+          userId: player.userId,
+          displayName: player.displayName,
+          avatarSeed: player.avatarSeed,
+          placement: player.placement,
+          mmrAfter: player.mmrAfter
+        }))
+      );
+      return;
+    }
+
     throw error;
-  } finally {
-    client.release();
   }
 }

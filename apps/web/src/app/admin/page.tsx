@@ -19,9 +19,9 @@ export default function AdminPage() {
   return (
     <div className="page-shell space-y-6 py-8 md:py-10">
       <SectionHeader
-        eyebrow="Ops Surface"
-        title="Local → tunnel → prod sans changer d’architecture"
-        body="Cette page sert de check rapide pour les URLs, le passkey RP ID et les dépendances infra attendues autour du site."
+        eyebrow="Admin"
+        title="Local → preview → prod sans changer d’architecture"
+        body="Cette page sert de contrôle rapide pour les URLs, le RP ID passkey et les dépendances infra attendues autour du site."
       />
 
       <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -47,7 +47,7 @@ export default function AdminPage() {
         </GlassPanel>
 
         <GlassPanel className="space-y-4">
-          <h2 className="font-display text-3xl text-white">Runtime Values</h2>
+          <h2 className="font-display text-3xl text-white">Valeurs runtime</h2>
           <div className="space-y-3">
             {checks.map(([label, value]) => (
               <div key={label} className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3">
@@ -60,7 +60,7 @@ export default function AdminPage() {
       </div>
 
       <GlassPanel className="space-y-4">
-        <h2 className="font-display text-3xl text-white">Word Bank</h2>
+        <h2 className="font-display text-3xl text-white">Banque de mots</h2>
         <p className="max-w-3xl text-sm leading-6 text-slate-300">
           Les mots solution restent curés pour garder des rounds propres. Les guesses valides, eux, sont contrôlés contre
           une vraie wordlist française filtrée sur les longueurs de partie, avec blacklist anti-profanité normalisée.
@@ -71,11 +71,11 @@ export default function AdminPage() {
             <p className="number-tabular mt-2 text-3xl text-white">{dictionaryStats.solutionCount}</p>
           </div>
           <div className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-4">
-            <p className="eyebrow">Allowed Guesses</p>
+            <p className="eyebrow">Essais autorisés</p>
             <p className="number-tabular mt-2 text-3xl text-white">{dictionaryStats.allowedCount}</p>
           </div>
           <div className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-4">
-            <p className="eyebrow">Blocked Terms</p>
+            <p className="eyebrow">Termes bloqués</p>
             <p className="number-tabular mt-2 text-3xl text-white">{dictionaryStats.bannedCount}</p>
           </div>
         </div>

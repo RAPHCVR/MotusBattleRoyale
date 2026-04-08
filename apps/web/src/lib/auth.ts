@@ -7,7 +7,49 @@ import { createGuestName } from "@motus/game-core";
 
 import { db } from "./db";
 import { env } from "./env";
+import { fileAuthAdapter } from "./file-auth-adapter";
 import { migrateAnonymousProfile } from "./player-profile";
+
+const authStorageMode = env.AUTH_STORAGE_MODE ?? (env.LOCAL_STORAGE_FALLBACK_ENABLED ? "memory" : "postgres");
+const defaultLocalOrigins = ["http://localhost:3000", "http://127.0.0.1:3000"];
+
+function expandTrustedOrigin(value?: string) {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = new URL(value);
+    const origins = new Set([parsed.origin]);
+    const port = parsed.port ? `:${parsed.port}` : "";
+
+    if (parsed.hostname === "localhost") {
+      origins.add(`${parsed.protocol}//127.0.0.1${port}`);
+    }
+
+    if (parsed.hostname === "127.0.0.1") {
+      origins.add(`${parsed.protocol}//localhost${port}`);
+    }
+
+    return [...origins];
+  } catch {
+    return [value];
+  }
+}
+
+const trustedOrigins = Array.from(
+  new Set(
+    [
+      env.NEXT_PUBLIC_APP_URL,
+      env.PASSKEY_ORIGIN,
+      process.env.NEXT_PUBLIC_APP_URL,
+      process.env.PASSKEY_ORIGIN,
+      ...defaultLocalOrigins
+    ]
+      .flatMap((value) => expandTrustedOrigin(value))
+      .filter((value): value is string => Boolean(value))
+  )
+);
 
 const plugins: any[] = [
   nextCookies(),
@@ -39,13 +81,16 @@ if (env.TURNSTILE_SECRET_KEY) {
 }
 
 export const auth = betterAuth({
-  database: {
-    db,
-    type: "postgres"
-  },
+  database:
+    authStorageMode === "memory"
+      ? fileAuthAdapter()
+      : {
+          db,
+          type: "postgres"
+        },
   baseURL: env.AUTH_BASE_URL,
   secret: env.BETTER_AUTH_SECRET,
-  trustedOrigins: [env.NEXT_PUBLIC_APP_URL, env.PASSKEY_ORIGIN],
+  trustedOrigins,
   emailAndPassword: {
     enabled: true,
     autoSignIn: true

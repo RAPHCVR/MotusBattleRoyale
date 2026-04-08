@@ -1,12 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
 const navLinks = [
   { href: "/play", label: "Jouer", tone: "primary" as const },
-  { href: "/leaderboard", label: "Leaderboard", tone: "secondary" as const },
+  { href: "/leaderboard", label: "Classement", tone: "secondary" as const },
   { href: "/profile", label: "Profil", tone: "secondary" as const },
   { href: "/admin", label: "Admin", tone: "secondary" as const }
 ];
@@ -14,34 +15,92 @@ const navLinks = [
 export function AppChrome(props: Readonly<{ children: React.ReactNode; players?: number }>) {
   const pathname = usePathname();
   const isPlayRoute = pathname?.startsWith("/play") ?? false;
+  const [players, setPlayers] = useState(props.players);
+
+  useEffect(() => {
+    setPlayers(props.players);
+  }, [props.players]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshMetrics() {
+      try {
+        const response = await fetch("/api/game/metrics", {
+          cache: "no-store"
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { players?: number };
+
+        if (!cancelled && typeof payload.players === "number") {
+          setPlayers(payload.players);
+        }
+      } catch {
+        // Ignore transient polling failures and keep the last known value.
+      }
+    }
+
+    void refreshMetrics();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void refreshMetrics();
+      }
+    }, 5000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshMetrics();
+      }
+    };
+
+    const handleMetricsRefresh = () => {
+      void refreshMetrics();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("motus-metrics-refresh", handleMetricsRefresh);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("motus-metrics-refresh", handleMetricsRefresh);
+    };
+  }, []);
 
   return (
     <>
       <header className="shrink-0 z-40 border-b border-white/6 bg-slate-950/45 backdrop-blur-xl">
         <div
           className={clsx(
-            "page-shell flex gap-3 md:flex-row md:items-center md:justify-between",
-            isPlayRoute ? "py-3 sm:py-4" : "flex-col py-4 sm:py-5 md:py-6"
+            "page-shell",
+            isPlayRoute
+              ? "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2.5 sm:flex sm:flex-row sm:items-center sm:justify-between sm:py-3"
+              : "flex flex-col gap-3 py-4 sm:py-5 md:flex-row md:items-center md:justify-between md:py-6"
           )}
         >
-          <Link href="/" className="flex items-center gap-3">
+          <Link href="/" className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <div
               className={clsx(
                 "flex items-center justify-center rounded-2xl border border-cyan-300/30 bg-cyan-300/10 font-display font-semibold text-cyan-50",
-                isPlayRoute ? "h-10 w-10 text-base" : "h-11 w-11 text-lg"
+                isPlayRoute ? "h-9 w-9 text-sm sm:h-10 sm:w-10 sm:text-base" : "h-11 w-11 text-lg"
               )}
             >
               MR
             </div>
-            <div>
-              <p className="eyebrow flex items-center gap-1.5">
+            <div className="min-w-0">
+              <p className={clsx("eyebrow flex items-center gap-1.5", isPlayRoute && "text-[10px] tracking-[0.32em] sm:text-[11px] sm:tracking-[0.38em]")}>
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-75"></span>
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-500"></span>
                 </span>
-                {props.players !== undefined ? `${props.players} ${props.players > 1 ? 'joueurs en ligne' : 'joueur en ligne'}` : "Live Word Arena"}
+                {players !== undefined ? `${players} ${players > 1 ? "joueurs connectés" : "joueur connecté"}` : "Arène de mots en direct"}
               </p>
-              <p className={clsx("font-display font-semibold text-white", isPlayRoute ? "text-base sm:text-lg" : "text-lg")}>
+              <p className={clsx("truncate font-display font-semibold text-white", isPlayRoute ? "text-[1.05rem] leading-tight sm:text-lg" : "text-lg")}>
                 Motus Royale
               </p>
             </div>
@@ -50,7 +109,7 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
           <nav
             className={clsx(
               isPlayRoute
-                ? "flex w-full gap-2 overflow-x-auto pb-1 md:w-auto md:justify-end [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
+                ? "col-start-2 flex w-auto flex-nowrap items-center justify-end gap-1.5 overflow-x-auto pb-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
                 : "grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:grid-cols-none md:justify-end"
             )}
           >
@@ -60,9 +119,14 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
                 href={link.href}
                 className={clsx(
                   link.tone === "primary" ? "button-primary" : "button-secondary",
+                  pathname === link.href && link.tone === "secondary" && "border-cyan-300/30 bg-cyan-300/12 text-cyan-50",
                   isPlayRoute
-                    ? "min-h-10 shrink-0 whitespace-nowrap px-3 py-2 text-sm sm:px-4"
-                    : "w-full whitespace-nowrap md:w-auto"
+                    ? "min-h-9 shrink-0 whitespace-nowrap px-3 py-1.5 text-[13px] sm:min-h-10 sm:px-4 sm:py-2 sm:text-sm"
+                    : "",
+                  isPlayRoute && link.href === "/admin" && "hidden xl:inline-flex",
+                  !isPlayRoute
+                    ? "w-full whitespace-nowrap md:w-auto"
+                    : ""
                 )}
               >
                 {link.label}
@@ -73,22 +137,6 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
       </header>
 
       <main className="flex-1 overflow-y-auto overflow-x-clip flex flex-col">{props.children}</main>
-
-      {!isPlayRoute ? (
-        <footer className="shrink-0 border-t border-white/6 py-8 text-center text-sm text-slate-400">
-          <div className="page-shell flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <p>FR-first realtime puzzle arena. Local, tunnel, puis prod sur la même topo.</p>
-            <div className="flex flex-wrap items-center justify-center gap-4">
-              <Link href="/play" className="text-cyan-200 transition hover:text-cyan-50">
-                Lancer une partie
-              </Link>
-              <Link href="/admin" className="text-cyan-200 transition hover:text-cyan-50">
-                Vérifier l’infra
-              </Link>
-            </div>
-          </div>
-        </footer>
-      ) : null}
     </>
   );
 }

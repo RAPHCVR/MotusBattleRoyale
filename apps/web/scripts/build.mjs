@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const appRoot = dirname(__dirname);
 const nextDir = join(appRoot, ".next");
+const standaloneStaticDir = join(nextDir, "standalone", "apps", "web", ".next", "static");
 const require = createRequire(import.meta.url);
 const nextBin = require.resolve("next/dist/bin/next");
 const packageManagerExecPath = process.env.npm_execpath;
@@ -58,4 +59,9 @@ await new Promise((resolve, reject) => {
 
     reject(new Error(`Next build exited with code ${code ?? "unknown"}.`));
   });
+});
+
+await cp(join(nextDir, "static"), standaloneStaticDir, {
+  force: true,
+  recursive: true
 });

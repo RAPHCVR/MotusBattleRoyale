@@ -1,6 +1,17 @@
-import { createAvatarSeed, sanitizeDisplayName } from "@motus/game-core";
+import {
+  createAvatarSeed,
+  sanitizeDisplayName,
+} from "@motus/game-core";
+import type { PoolClient } from "pg";
 
+import { env } from "./env";
 import { pgPool } from "./db";
+import {
+  getLocalDevLeaderboard,
+  isLocalDatabaseConnectionError,
+  mergeLocalDevPlayerProfiles,
+  upsertLocalDevPlayerProfile
+} from "./local-dev-store";
 
 export interface PlayerProfile {
   userId: string;
@@ -16,74 +27,95 @@ export async function ensurePlayerProfile(user: { id: string; name: string }): P
   const displayName = sanitizeDisplayName(user.name, "Guest Nova");
   const avatarSeed = createAvatarSeed(user.id);
 
-  const result = await pgPool.query<{
-    user_id: string;
-    display_name: string;
-    avatar_seed: string;
-    mmr: number;
-    wins: number;
-    matches_played: number;
-    best_finish: number | null;
-  }>(
-    `
-      INSERT INTO player_profile (user_id, display_name, avatar_seed)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id)
-      DO UPDATE SET
-        display_name = EXCLUDED.display_name,
-        avatar_seed = EXCLUDED.avatar_seed,
-        updated_at = NOW()
-      RETURNING user_id, display_name, avatar_seed, mmr, wins, matches_played, best_finish
-    `,
-    [user.id, displayName, avatarSeed]
-  );
+  try {
+    const result = await pgPool.query<{
+      user_id: string;
+      display_name: string;
+      avatar_seed: string;
+      mmr: number;
+      wins: number;
+      matches_played: number;
+      best_finish: number | null;
+    }>(
+      `
+        INSERT INTO player_profile (user_id, display_name, avatar_seed)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+          display_name = EXCLUDED.display_name,
+          avatar_seed = EXCLUDED.avatar_seed,
+          updated_at = NOW()
+        RETURNING user_id, display_name, avatar_seed, mmr, wins, matches_played, best_finish
+      `,
+      [user.id, displayName, avatarSeed]
+    );
 
-  const row = result.rows[0];
-  return {
-    userId: row.user_id,
-    displayName: row.display_name,
-    avatarSeed: row.avatar_seed,
-    mmr: row.mmr,
-    wins: row.wins,
-    matchesPlayed: row.matches_played,
-    bestFinish: row.best_finish
-  };
+    const row = result.rows[0];
+    return {
+      userId: row.user_id,
+      displayName: row.display_name,
+      avatarSeed: row.avatar_seed,
+      mmr: row.mmr,
+      wins: row.wins,
+      matchesPlayed: row.matches_played,
+      bestFinish: row.best_finish
+    };
+  } catch (error) {
+    if (env.LOCAL_STORAGE_FALLBACK_ENABLED && isLocalDatabaseConnectionError(error)) {
+      return upsertLocalDevPlayerProfile({
+        userId: user.id,
+        displayName,
+        avatarSeed
+      });
+    }
+
+    throw error;
+  }
 }
 
 export async function getLeaderboard(limit = 24): Promise<PlayerProfile[]> {
-  const result = await pgPool.query<{
-    user_id: string;
-    display_name: string;
-    avatar_seed: string;
-    mmr: number;
-    wins: number;
-    matches_played: number;
-    best_finish: number | null;
-  }>(
-    `
-      SELECT user_id, display_name, avatar_seed, mmr, wins, matches_played, best_finish
-      FROM player_profile
-      ORDER BY mmr DESC, wins DESC, matches_played DESC
-      LIMIT $1
-    `,
-    [limit]
-  );
+  try {
+    const result = await pgPool.query<{
+      user_id: string;
+      display_name: string;
+      avatar_seed: string;
+      mmr: number;
+      wins: number;
+      matches_played: number;
+      best_finish: number | null;
+    }>(
+      `
+        SELECT user_id, display_name, avatar_seed, mmr, wins, matches_played, best_finish
+        FROM player_profile
+        ORDER BY mmr DESC, wins DESC, matches_played DESC
+        LIMIT $1
+      `,
+      [limit]
+    );
 
-  return result.rows.map((row) => ({
-    userId: row.user_id,
-    displayName: row.display_name,
-    avatarSeed: row.avatar_seed,
-    mmr: row.mmr,
-    wins: row.wins,
-    matchesPlayed: row.matches_played,
-    bestFinish: row.best_finish
-  }));
+    return result.rows.map((row) => ({
+      userId: row.user_id,
+      displayName: row.display_name,
+      avatarSeed: row.avatar_seed,
+      mmr: row.mmr,
+      wins: row.wins,
+      matchesPlayed: row.matches_played,
+      bestFinish: row.best_finish
+    }));
+  } catch (error) {
+    if (env.LOCAL_STORAGE_FALLBACK_ENABLED && isLocalDatabaseConnectionError(error)) {
+      return getLocalDevLeaderboard(limit);
+    }
+
+    throw error;
+  }
 }
 
 export async function migrateAnonymousProfile(fromUserId: string, toUserId: string): Promise<void> {
-  const client = await pgPool.connect();
-
   try {
+    const client: PoolClient = await pgPool.connect();
+
+    try {
     await client.query("BEGIN");
 
     await client.query(
@@ -111,10 +143,18 @@ export async function migrateAnonymousProfile(fromUserId: string, toUserId: stri
     await client.query(`UPDATE sanction SET user_id = $2 WHERE user_id = $1`, [fromUserId, toUserId]);
 
     await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (env.LOCAL_STORAGE_FALLBACK_ENABLED && isLocalDatabaseConnectionError(error)) {
+      await mergeLocalDevPlayerProfiles(fromUserId, toUserId);
+      return;
+    }
+
     throw error;
-  } finally {
-    client.release();
   }
 }

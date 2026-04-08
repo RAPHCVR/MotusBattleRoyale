@@ -341,7 +341,9 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
       runtime.revealedIndexes = new Set<number>([0]);
 
       if (!this.isEligibleForRound(player.userId, roundIndex)) {
-        player.status = player.status === "left" ? "left" : "spectating";
+        if (player.status !== "left" && player.status !== "eliminated") {
+          player.status = "spectating";
+        }
         player.attemptsUsed = 0;
         player.roundScore = 0;
         continue;
@@ -366,7 +368,7 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
   protected isEligibleForRound(userId: string, roundIndex: number): boolean {
     const player = this.state.players.get(userId);
 
-    if (!player || player.status === "left" || player.status === "eliminated" || player.status === "spectating") {
+    if (!player || player.status === "left" || player.status === "eliminated") {
       return false;
     }
 
@@ -436,10 +438,14 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
   }
 
   protected applyQuarterCut(): void {
-    const active = this.sortedPlayers().filter((player) => player.status !== "left");
-    const cutCount = getCutCount(active.length);
+    const contenders = this.sortedPlayers().filter((player) => player.status !== "left" && player.status !== "eliminated");
+    const cutCount = getCutCount(contenders.length);
 
-    for (const player of active.slice(-cutCount)) {
+    if (cutCount <= 0) {
+      return;
+    }
+
+    for (const player of contenders.slice(-cutCount)) {
       player.status = "eliminated";
     }
   }
@@ -447,6 +453,7 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
   protected selectFinalists(): void {
     const active = this.sortedPlayers().filter((player) => player.status !== "left" && player.status !== "eliminated");
     const finalists = getFinalists(active).map((player) => player.userId);
+    const finalistsSet = new Set(finalists);
 
     this.state.finalists.splice(0, this.state.finalists.length);
 
@@ -459,7 +466,7 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
         continue;
       }
 
-      if (!finalists.includes(player.userId)) {
+      if (!finalistsSet.has(player.userId)) {
         player.status = "eliminated";
       }
     }

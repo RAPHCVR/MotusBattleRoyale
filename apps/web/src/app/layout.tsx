@@ -1,20 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Instrument_Sans, Sora } from "next/font/google";
 
 import { AppChrome } from "@/components/app-chrome";
 import { getGameMetrics } from "@/lib/game-server";
 
 import "./globals.css";
-
-const displayFont = Sora({
-  subsets: ["latin"],
-  variable: "--font-display"
-});
-
-const bodyFont = Instrument_Sans({
-  subsets: ["latin"],
-  variable: "--font-ui"
-});
 
 export const metadata: Metadata = {
   title: "Motus Royale",
@@ -33,7 +22,7 @@ export default async function RootLayout(props: Readonly<{ children: React.React
 
   return (
     <html lang="fr">
-      <body className={`${displayFont.variable} ${bodyFont.variable} antialiased flex flex-col h-[100dvh] overflow-hidden`}>
+      <body className="antialiased flex flex-col h-[100dvh] overflow-hidden">
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
           <div className="absolute left-[-8%] top-[-10%] h-72 w-72 rounded-full bg-cyan-400/15 blur-3xl" />
           <div className="absolute bottom-[-16%] right-[-8%] h-80 w-80 rounded-full bg-lime-400/10 blur-3xl" />

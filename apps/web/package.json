@@ -6,13 +6,16 @@
   "scripts": {
     "build": "node ./scripts/build.mjs",
     "dev": "next dev --webpack --port 3000",
-    "lint": "tsc -p tsconfig.json",
+    "lint": "next typegen && tsc -p tsconfig.json",
     "start": "node ./.next/standalone/apps/web/server.js",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "next typegen && tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@better-auth/memory-adapter": "1.5.5",
     "@better-auth/passkey": "^1.2.2",
+    "@fontsource-variable/instrument-sans": "^5.2.8",
+    "@fontsource-variable/sora": "^5.2.8",
     "@motus/dictionary": "workspace:*",
     "@motus/game-core": "workspace:*",
     "@motus/protocol": "workspace:*",
@@ -20,6 +23,7 @@
     "better-auth": "^1.5.5",
     "clsx": "^2.1.1",
     "colyseus.js": "^0.16.18",
+    "dotenv": "17.2.3",
     "jose": "^6.1.2",
     "kysely": "^0.28.8",
     "nanoid": "^5.1.6",

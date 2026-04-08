@@ -10,9 +10,9 @@ export default async function LeaderboardPage() {
   return (
     <div className="page-shell space-y-6 py-8 md:py-10">
       <SectionHeader
-        eyebrow="Competitive Ladder"
-        title="Leaderboard caché côté MMR, visible côté prestige"
-        body="Le matchmaking reste discret, mais les meilleurs profils remontent ici avec leurs wins, leur volume et leur meilleure finition."
+        eyebrow="Classement"
+        title="Les meilleurs profils du moment"
+        body="Le matchmaking reste discret, mais les profils les plus solides remontent ici avec leurs victoires, leur volume de jeu et leur meilleure place."
       />
 
       <div className="space-y-3 md:hidden">
@@ -35,11 +35,11 @@ export default async function LeaderboardPage() {
                 <p className="number-tabular mt-2 text-lg text-white">{player.mmr}</p>
               </div>
               <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3">
-                <p className="eyebrow">Wins</p>
+                <p className="eyebrow">Victoires</p>
                 <p className="number-tabular mt-2 text-lg text-white">{player.wins}</p>
               </div>
               <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3">
-                <p className="eyebrow">Best</p>
+                <p className="eyebrow">Meilleure place</p>
                 <p className="number-tabular mt-2 text-lg text-white">{player.bestFinish ?? "-"}</p>
               </div>
             </div>
@@ -49,11 +49,11 @@ export default async function LeaderboardPage() {
 
       <GlassPanel className="hidden overflow-hidden md:block">
         <div className="grid grid-cols-[72px_1.4fr_0.8fr_0.8fr_0.8fr] gap-3 border-b border-white/8 px-4 py-4 text-[11px] uppercase tracking-[0.28em] text-slate-400">
-          <span>Rank</span>
-          <span>Player</span>
+          <span>Rang</span>
+          <span>Joueur</span>
           <span>MMR</span>
-          <span>Wins</span>
-          <span>Best</span>
+          <span>Victoires</span>
+          <span>Meilleure place</span>
         </div>
 
         <div className="divide-y divide-white/6">

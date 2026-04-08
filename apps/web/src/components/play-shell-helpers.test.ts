@@ -19,7 +19,10 @@ const singleHintBoard: BoardSnapshot = {
   hintLetters: ["P", "", "", "", "", ""],
   attemptsRemaining: 6,
   clueUsed: false,
-  canUseClue: false
+  canUseClue: false,
+  roundResolved: false,
+  roundSolved: false,
+  roundScore: 0
 };
 
 const multiHintBoard: BoardSnapshot = {

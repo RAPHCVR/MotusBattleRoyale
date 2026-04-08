@@ -4,15 +4,15 @@ import { GlassPanel, MetricBadge, SectionHeader, WordTile } from "@motus/ui";
 import { getGameMetrics } from "@/lib/game-server";
 
 const heroSignals = [
-  { label: "Live queue", tone: "signal-pill-live" },
-  { label: "FR-first", tone: "signal-pill-lime" },
-  { label: "Realtime scoring", tone: "signal-pill-amber" }
+  { label: "Queue live", tone: "signal-pill-live" },
+  { label: "FR natif", tone: "signal-pill-lime" },
+  { label: "Score temps réel", tone: "signal-pill-amber" }
 ];
 
 const liveFeed = [
-  { label: "Queue publique", body: "Entrée instantanée, remplissage progressif et démarrage lisible." },
-  { label: "Feedback clair", body: "Vert, ambre, cyan, ardoise. Les états restent lisibles sans bruit visuel." },
-  { label: "Clutch finale", body: "7 rounds, cut line, finale top 4 et rail de score toujours visible." }
+  { label: "Match public", body: "Entrée rapide, montée progressive en charge et départ lisible." },
+  { label: "Repères clairs", body: "Vert, ambre, cyan, ardoise: chaque état se distingue tout de suite." },
+  { label: "Finale tendue", body: "7 manches, cut, finale top 4 et score toujours visible." }
 ];
 
 const heroWordPreview: Array<{
@@ -34,28 +34,28 @@ const pillars = [
     body: "Chaque état de lettre se différencie immédiatement. Le joueur n’a pas à deviner l’interface en pleine manche."
   },
   {
-    title: "Jeu web moderne",
-    body: "Le site reste vivant sans tomber dans le gimmick. Le home, les surfaces et les métriques racontent déjà le jeu."
+    title: "Même langage partout",
+    body: "Le home, les surfaces et la partie parlent la même langue visuelle pour éviter les ruptures de repères."
   },
   {
-    title: "Même stack partout",
-    body: "Local, tunnel et domaine public gardent la même topologie pour éviter les surprises d’auth, de cookies ou de WebSockets."
+    title: "Déploiement propre",
+    body: "Local, preview et prod gardent la même logique pour éviter les surprises côté auth, cookies et WebSocket."
   }
 ];
 
 const launchSteps = [
-  ["01", "Session instantanée", "Invité en un clic, puis upgrade sans casser ton profil."],
-  ["02", "Room ou matchmaking", "Queue publique rapide ou room privée à code."],
-  ["03", "Lecture immédiate", "Le feedback visuel se comprend en une manche, même sur mobile."]
+  ["01", "Session express", "Entre en invité puis garde ton profil si tu veux créer un compte."],
+  ["02", "Public ou privé", "Match public rapide ou salon à code pour jouer entre amis."],
+  ["03", "Lecture immédiate", "Les retours se comprennent en un coup d’œil, même sur mobile."]
 ];
 
 export default async function HomePage() {
   const metrics = await getGameMetrics();
 
   const heroMetrics = [
-    { label: "Joueurs en ligne", value: `${metrics.players} connectés` },
-    { label: "Rooms actives", value: `${metrics.rooms} en cours` },
-    { label: "Ping", value: "114 ms p95" }
+    { label: "Joueurs connectés", value: `${metrics.players}` },
+    { label: "Salons actifs", value: `${metrics.rooms}` },
+    { label: "Latence", value: "114 ms p95" }
   ];
 
   return (
@@ -73,19 +73,19 @@ export default async function HomePage() {
               </div>
 
               <div className="space-y-4">
-                <p className="eyebrow">Word Arena 2026</p>
+                <p className="eyebrow">Arène de mots</p>
                 <h1 className="max-w-[12ch] text-balance font-display text-4xl font-semibold tracking-tight text-white sm:text-5xl md:text-7xl">
                   Une arène de mots qui se comprend en un regard.
                 </h1>
                 <p className="max-w-2xl text-base leading-7 text-slate-300 md:text-lg">
-                  Pas un clone télé, pas une UI confuse. Tu entres, tu lis les états instantanément, tu joues en realtime,
-                  et l’interface reste nette sur desktop comme sur téléphone.
+                  Tu entres, tu comprends l’état de la manche, puis tu joues tout de suite. L’interface reste nette sur
+                  desktop comme sur téléphone.
                 </p>
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Link href="/play" className="button-primary">
-                  Entrer dans l’arène
+                  Jouer maintenant
                 </Link>
                 <Link href="/leaderboard" className="button-secondary">
                   Voir le classement
@@ -93,9 +93,9 @@ export default async function HomePage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <MetricBadge label="Format" value="7 rounds / top 4" />
-                <MetricBadge label="Realtime" value="Colyseus + ws" tone="good" />
-                <MetricBadge label="Sessions" value="Guest ou compte" />
+                <MetricBadge label="Format" value="7 manches / top 4" />
+                <MetricBadge label="Temps réel" value="Colyseus + WebSocket" tone="good" />
+                <MetricBadge label="Session" value="Invité ou compte" />
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
@@ -114,13 +114,13 @@ export default async function HomePage() {
                   <div className="relative z-10 space-y-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="eyebrow">Live Preview</p>
+                        <p className="eyebrow">Aperçu de partie</p>
                         <h2 className="mt-2 font-display text-3xl text-white sm:text-4xl">Lecture immédiate</h2>
                         <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
-                          Le home montre déjà le langage du jeu: mêmes couleurs, mêmes surfaces, même hiérarchie que pendant la partie.
+                          Le home reprend déjà la lecture de la partie: mêmes couleurs, mêmes surfaces, même hiérarchie.
                         </p>
                       </div>
-                      <MetricBadge label="Round" value="00:41" tone="danger" />
+                      <MetricBadge label="Manche" value="00:41" tone="danger" />
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-3">
@@ -204,15 +204,15 @@ export default async function HomePage() {
 
       <section className="space-y-6">
         <SectionHeader
-          eyebrow="Why It Reads Better"
-          title="Chaque écran doit se comprendre à vitesse de jeu"
+          eyebrow="Lisibilité"
+          title="Chaque écran doit se lire à vitesse de jeu"
           body="La lecture doit survivre au stress, au mobile et à la vision périphérique. Le site n’a pas le droit d’être joli mais ambigu."
         />
 
         <div className="grid gap-5 md:grid-cols-3">
           {pillars.map((pillar) => (
             <GlassPanel key={pillar.title} className="space-y-4">
-              <p className="eyebrow">Core Pillar</p>
+              <p className="eyebrow">Pilier</p>
               <h3 className="font-display text-2xl text-white">{pillar.title}</h3>
               <p className="text-sm leading-6 text-slate-300">{pillar.body}</p>
             </GlassPanel>
@@ -223,18 +223,18 @@ export default async function HomePage() {
       <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <GlassPanel className="space-y-5">
           <SectionHeader
-            eyebrow="Flow"
-            title="Même topo du laptop au domaine public"
-            body="Boucle dev sur localhost, QA sur Cloudflare Tunnel avec les vrais hostnames, puis ouverture progressive sans rebrancher toute la stack."
+            eyebrow="Déploiement"
+            title="Même base du localhost à la prod"
+            body="La boucle locale, la preview et l’ouverture publique gardent la même logique pour éviter les surprises côté auth et WebSocket."
           />
           <div className="space-y-3 text-sm leading-6 text-slate-300">
             <p>
               <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">web</code> sert le site, l’auth et les
-              tickets.
+              tickets de partie.
             </p>
             <p>
-              <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">game</code> gère matchmaking, rooms et
-              scoring autoritaire.
+              <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">game</code> gère le matchmaking, les
+              salons et le scoring autoritaire.
             </p>
             <p>
               <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">caddy</code> et{" "}
@@ -246,12 +246,12 @@ export default async function HomePage() {
 
         <GlassPanel className="space-y-6">
           <SectionHeader
-            eyebrow="Launch Ready"
-            title="Entrer en jeu sans friction"
-            body="Le parcours d’entrée reste direct: tu crées ta session, tu rentres en room, et l’interface garde ses repères du home à la partie."
+            eyebrow="Entrée en partie"
+            title="Entrer sans friction"
+            body="Le parcours reste direct: tu crées ta session, tu entres en partie, puis l’interface garde les mêmes repères du home au match."
             action={
               <Link href="/play" className="button-primary">
-                Ouvrir l’arène
+                Ouvrir le jeu
               </Link>
             }
           />
