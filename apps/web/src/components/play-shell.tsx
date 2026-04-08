@@ -221,6 +221,7 @@ export function PlayShell() {
   const roomRef = useRef<Room | null>(null);
   const clientRef = useRef<Client | null>(null);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
+  const liveDockRef = useRef<HTMLDivElement | null>(null);
   const previousBoardRef = useRef<BoardSnapshot | null>(null);
   const previousPlayerStatusRef = useRef<string | null>(null);
   const playSurfaceRef = useRef<HTMLDivElement | null>(null);
@@ -230,6 +231,7 @@ export function PlayShell() {
   const [isFullscreenSupported, setIsFullscreenSupported] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
+  const [liveDockHeight, setLiveDockHeight] = useState(0);
 
   const deferredSnapshot = useDeferredValue(roomSnapshot);
   const sessionUser = session?.user as { id: string; name: string; email: string; isAnonymous?: boolean } | undefined;
@@ -312,11 +314,13 @@ export function PlayShell() {
   const compactDockLayout = compactTouchRound || compactDesktopKeyboard;
   const compactTouchKeyboardVisible = compactTouchRound && fullscreenActive && showTouchKeyboard;
   const compactLobbySidebar = fullscreenActive && !prefersTouchInput && !isLiveRound;
+  const compactLobbySidebarTight = compactLobbySidebar && viewportHeight > 0 && viewportHeight <= 820;
   const denseDesktopBoard = isLiveRound && !prefersTouchInput && (compactDesktopRound || compactDesktopKeyboard);
   const compactLiveRound = compactTouchRound || compactDesktopRound || compactDesktopKeyboard;
   const canToggleFullscreen = isFullscreenSupported || prefersTouchInput;
   const fullscreenScrollable = fullscreenActive && !isLiveRound;
   const fullscreenButtonLabel = fullscreenActive ? (prefersTouchInput ? "Quitter" : "Quitter le plein écran") : "Plein écran";
+  const stickyTouchDock = isLiveRound && prefersTouchInput && !fullscreenActive;
   const roomCodeLabel = roomSnapshot?.roomCode ?? "Public";
   const matchInfoTitle =
     roomPhase === "results"
@@ -403,6 +407,7 @@ export function PlayShell() {
         : "max(22rem, min(31rem, calc(100dvh - 21rem)))"
     : "34rem";
   const virtualKeyboardMaxWidth = compactTouchKeyboardVisible ? "min(100%, 19rem)" : compactTouchRound ? "min(100%, 20rem)" : compactDesktopKeyboard ? "min(100%, 24rem)" : "34rem";
+  const mobileStickyDockSpacing = stickyTouchDock ? liveDockHeight + 12 : 0;
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 250);
@@ -441,6 +446,35 @@ export function PlayShell() {
       window.visualViewport?.removeEventListener("scroll", handleViewportChange);
     };
   }, []);
+
+  useEffect(() => {
+    const liveDockElement = liveDockRef.current;
+
+    if (!liveDockElement || !isLiveRound) {
+      setLiveDockHeight(0);
+      return;
+    }
+
+    const syncLiveDockHeight = () => {
+      setLiveDockHeight(Math.ceil(liveDockElement.getBoundingClientRect().height));
+    };
+
+    syncLiveDockHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      syncLiveDockHeight();
+    });
+
+    observer.observe(liveDockElement);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isLiveRound, fullscreenActive, prefersTouchInput, showTouchKeyboard, showDesktopKeyboard, compactTouchKeyboardVisible, viewportHeight]);
 
   useEffect(() => {
     const canFullscreen = Boolean(document.fullscreenEnabled && playSurfaceRef.current?.requestFullscreen);
@@ -1394,6 +1428,7 @@ export function PlayShell() {
                         isLiveRound && "min-h-0 flex-1",
                         compactTouchRound && "flex items-start justify-center pt-1 pb-2"
                       )}
+                      style={mobileStickyDockSpacing ? { paddingBottom: `${mobileStickyDockSpacing}px` } : undefined}
                     >
                       {boardIsStale ? (
                         <div className="mx-auto w-full max-w-[34rem] rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-8 text-center">
@@ -1436,12 +1471,13 @@ export function PlayShell() {
 
                     {isLiveRound && (
                       <div
+                        ref={liveDockRef}
                         className={clsx(
                           "z-30 mx-auto w-full",
                           compactTouchRound
-                            ? "mt-auto shrink-0 pt-2"
+                            ? "mt-auto shrink-0 pt-3"
                             : prefersTouchInput
-                              ? "sticky bottom-0 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
+                              ? "sticky bottom-0 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
                               : "mt-auto pt-2"
                         )}
                         style={{ maxWidth: liveDockMaxWidth }}
@@ -1660,8 +1696,10 @@ export function PlayShell() {
                     lockedSidebarToDesktop
                       ? "hidden xl:grid xl:self-start xl:sticky xl:top-4 xl:grid-cols-1 xl:gap-4"
                       : compactLobbySidebar
-                        ? "lg:grid-cols-2 xl:grid-cols-1 xl:self-start xl:max-h-[calc(100dvh-5.5rem)] xl:overflow-y-auto xl:gap-4 xl:pr-1"
+                        ? "lg:grid-cols-2 xl:grid-cols-1 xl:self-start xl:sticky xl:overflow-y-auto xl:pr-1"
                         : "lg:grid-cols-2 xl:sticky xl:top-6 xl:grid-cols-1"
+                    ,
+                    compactLobbySidebar && (compactLobbySidebarTight ? "xl:top-3 xl:max-h-[calc(100dvh-4.75rem)] xl:gap-3" : "xl:top-4 xl:max-h-[calc(100dvh-5.5rem)] xl:gap-4")
                   )}
                 >
                   <div className={clsx("hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block", (isLiveRound || compactLobbySidebar) && "xl:hidden")}>
@@ -1701,7 +1739,8 @@ export function PlayShell() {
                       "rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5",
                       (lockedSidebarToDesktop || compactLobbySidebar) && "flex flex-col overflow-hidden",
                       lockedSidebarToDesktop && "max-h-[calc(100dvh-15rem)]",
-                      compactLobbySidebar && "xl:max-h-[calc(100dvh-9rem)]"
+                      compactLobbySidebar && "xl:max-h-[calc(100dvh-9rem)]",
+                      compactLobbySidebarTight && "sm:p-4"
                     )}
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1714,7 +1753,7 @@ export function PlayShell() {
                       <MetricBadge label="Joueurs" value={deferredSnapshot?.players.length ?? roomSnapshot.players.length} compact={compactLobbySidebar} />
                     </div>
 
-                    <div className={clsx("mt-5 space-y-3", (lockedSidebarToDesktop || compactLobbySidebar) && "flex-1 overflow-y-auto pr-1")}>
+                    <div className={clsx("mt-5 space-y-3", compactLobbySidebarTight && "mt-4 space-y-2.5", (lockedSidebarToDesktop || compactLobbySidebar) && "flex-1 overflow-y-auto pr-1")}>
                       {(deferredSnapshot?.players ?? roomSnapshot.players).map((player, index) => (
                         <div
                           key={player.userId}
@@ -1744,11 +1783,13 @@ export function PlayShell() {
                     </div>
                   </div>
 
-                  <div className={clsx("rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5", isLiveRound && "hidden", compactLobbySidebar && "xl:p-4")}>
+                  <div className={clsx("rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5", isLiveRound && "hidden", compactLobbySidebar && "xl:p-4", compactLobbySidebarTight && "sm:p-4")}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="eyebrow">État du match</p>
-                        <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">{matchInfoTitle}</h3>
+                        <h3 className={clsx("mt-2 font-display text-2xl text-white sm:text-3xl", compactLobbySidebarTight && "sm:text-[1.75rem]")}>
+                          {matchInfoTitle}
+                        </h3>
                       </div>
                       <MetricBadge label="Statut" value={localStatusLabel} />
                     </div>
@@ -1777,11 +1818,11 @@ export function PlayShell() {
                         <p className="eyebrow">Podium</p>
                         {matchSummary.players.slice(0, 3).map((player) => (
                           <div key={player.userId} className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-white">
+                            <div className="flex min-w-0 items-center justify-between gap-3">
+                              <span className="truncate font-medium text-white" title={player.name}>
                                 #{player.placement} {player.name}
                               </span>
-                              <span className="number-tabular text-sm text-slate-200">{player.score}</span>
+                              <span className="number-tabular shrink-0 text-sm text-slate-200">{player.score}</span>
                             </div>
                           </div>
                         ))}

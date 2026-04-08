@@ -98,9 +98,12 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-75"></span>
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-500"></span>
                 </span>
-                {players !== undefined ? `${players} ${players > 1 ? "joueurs connectés" : "joueur connecté"}` : "Arène de mots en direct"}
+                <span className="max-[360px]:hidden">
+                  {players !== undefined ? `${players} ${players > 1 ? "joueurs connectés" : "joueur connecté"}` : "Arène de mots en direct"}
+                </span>
+                <span className="hidden max-[360px]:inline">{players !== undefined ? `${players} en ligne` : "Live"}</span>
               </p>
-              <p className={clsx("truncate font-display font-semibold text-white", isPlayRoute ? "text-[1.05rem] leading-tight sm:text-lg" : "text-base leading-tight sm:text-lg")}>
+              <p className={clsx("truncate font-display font-semibold text-white", isPlayRoute ? "text-[0.98rem] leading-tight sm:text-lg" : "text-base leading-tight sm:text-lg")}>
                 Motus Royale
               </p>
             </div>
@@ -123,6 +126,7 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
                   isPlayRoute
                     ? "min-h-9 shrink-0 whitespace-nowrap px-3 py-1.5 text-[13px] sm:min-h-10 sm:px-4 sm:py-2 sm:text-sm"
                     : "min-h-10 shrink-0 whitespace-nowrap px-3 py-2 text-sm md:min-h-11 md:px-4",
+                  isPlayRoute && "max-[360px]:px-2.5 max-[360px]:text-[12px]",
                   isPlayRoute && link.href === "/admin" && "hidden xl:inline-flex",
                   !isPlayRoute ? "md:w-auto" : ""
                 )}

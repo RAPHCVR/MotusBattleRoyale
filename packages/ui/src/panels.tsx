@@ -18,25 +18,25 @@ export function MetricBadge(props: { label: string; value: ReactNode; tone?: "de
   return (
     <div
       className={clsx(
-        props.compact ? "min-w-0 rounded-[14px] border px-2.5 py-2 sm:rounded-[16px]" : "min-w-0 rounded-[16px] border px-3 py-2.5 sm:rounded-full sm:px-4",
+        props.compact ? "max-w-full min-w-0 rounded-[14px] border px-2.5 py-2 sm:rounded-[16px]" : "max-w-full min-w-0 rounded-[16px] border px-3 py-2.5 sm:rounded-full sm:px-4",
         props.tone === "good" && "border-lime-400/40 bg-lime-400/10 text-lime-200",
         props.tone === "danger" && "border-rose-400/35 bg-rose-400/10 text-rose-100",
         props.tone === "default" && "border-cyan-300/25 bg-cyan-300/10 text-cyan-100"
       )}
     >
       {props.compact ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <div className="flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden">
           <span className="text-[8px] font-medium uppercase tracking-[0.2em] text-white/55">{props.label}</span>
           <span aria-hidden="true" className="text-[0.7rem] text-white/20">
             •
           </span>
-          <strong className="min-w-0 break-words text-[0.8rem] font-semibold leading-none text-white">{props.value}</strong>
+          <strong className="block min-w-0 max-w-full truncate whitespace-nowrap text-[0.8rem] font-semibold leading-none text-white">{props.value}</strong>
         </div>
       ) : (
         <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2.5">
           <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-white/55 sm:text-[10px] sm:tracking-[0.28em]">{props.label}</span>
           <span aria-hidden="true" className="hidden h-3 w-px bg-white/10 sm:block" />
-          <strong className="min-w-0 break-words text-sm font-semibold leading-snug text-white sm:text-[0.95rem]">{props.value}</strong>
+          <strong className="block min-w-0 max-w-full truncate whitespace-nowrap text-sm font-semibold leading-snug text-white sm:text-[0.95rem]">{props.value}</strong>
         </div>
       )}
     </div>

@@ -41,7 +41,9 @@ export default async function ProfilePage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
               <p className="eyebrow">Session</p>
-              <h3 className="mt-3 break-words font-display text-xl text-white sm:text-2xl">{session.user.name}</h3>
+              <h3 className="mt-3 truncate font-display text-xl text-white sm:text-2xl" title={session.user.name}>
+                {session.user.name}
+              </h3>
               <p className="mt-2 break-all text-sm text-slate-300">{session.user.email}</p>
               <p className="mt-4 text-sm leading-6 text-slate-400">
                 Les actions de connexion, de conversion invité → compte et d’ajout de passkey se font depuis la page de

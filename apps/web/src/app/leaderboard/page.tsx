@@ -21,7 +21,9 @@ export default async function LeaderboardPage() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="eyebrow">Rank #{index + 1}</p>
-                <h3 className="mt-2 break-words font-display text-xl text-white sm:text-2xl">{player.displayName}</h3>
+                <h3 className="mt-2 truncate font-display text-xl text-white sm:text-2xl" title={player.displayName}>
+                  {player.displayName}
+                </h3>
                 <p className="mt-2 text-sm text-slate-400">{player.matchesPlayed} matchs joués</p>
               </div>
               <div className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1.5 text-sm text-cyan-50">
