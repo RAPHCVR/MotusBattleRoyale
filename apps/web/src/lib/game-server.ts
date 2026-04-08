@@ -3,16 +3,54 @@ import { ticketBundleSchema } from "@motus/protocol";
 import { env } from "./env";
 import { ensurePlayerProfile } from "./player-profile";
 
-function getRequestOrigin(headers: Headers) {
-  const host = headers.get("x-forwarded-host") ?? headers.get("host");
-  const proto = headers.get("x-forwarded-proto");
+function isLoopbackHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function getForwardedValue(value: string | null) {
+  return value?.split(",")[0]?.trim() ?? null;
+}
+
+export function resolveAppOrigin(
+  headers: Headers,
+  options: {
+    appUrl?: string;
+    localDevEnabled?: boolean;
+  } = {},
+) {
+  const canonicalOrigin = new URL(options.appUrl ?? env.NEXT_PUBLIC_APP_URL)
+    .origin;
+  const host = getForwardedValue(
+    headers.get("x-forwarded-host") ?? headers.get("host"),
+  );
+  const proto = getForwardedValue(
+    headers.get("x-forwarded-proto"),
+  )?.toLowerCase();
 
   if (!host) {
-    return env.NEXT_PUBLIC_APP_URL;
+    return canonicalOrigin;
   }
 
-  const protocol = proto ?? (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
-  return `${protocol}://${host}`;
+  const protocol =
+    proto === "http" || proto === "https"
+      ? proto
+      : isLoopbackHost(host.split(":")[0] ?? host)
+        ? "http"
+        : "https";
+
+  try {
+    const candidateOrigin = new URL(`${protocol}://${host}`);
+
+    if (options.localDevEnabled ?? env.LOCAL_DEV_ENABLED) {
+      if (isLoopbackHost(candidateOrigin.hostname)) {
+        return candidateOrigin.origin;
+      }
+    }
+  } catch {
+    // Fall back to the configured origin if forwarded headers are malformed.
+  }
+
+  return canonicalOrigin;
 }
 
 function toWebSocketOrigin(origin: string) {
@@ -21,28 +59,47 @@ function toWebSocketOrigin(origin: string) {
   return parsed;
 }
 
-function resolveTicketWsEndpoint(headers: Headers, fallbackEndpoint: string) {
-  const requestOrigin = getRequestOrigin(headers);
+export function resolveTicketWsEndpoint(
+  headers: Headers,
+  fallbackEndpoint: string,
+  options: {
+    appUrl?: string;
+    localDevEnabled?: boolean;
+    tunnelHost?: string;
+    realtimeOrigin?: string;
+  } = {},
+) {
+  const requestOrigin = resolveAppOrigin(headers, options);
   const requestUrl = new URL(requestOrigin);
   const fallbackUrl = new URL(fallbackEndpoint);
 
-  if (requestUrl.hostname === "localhost" || requestUrl.hostname === "127.0.0.1") {
-    const realtimeOrigin = process.env.RT_ORIGIN_SERVICE ?? "http://localhost:2567";
+  if (isLoopbackHost(requestUrl.hostname)) {
+    const realtimeOrigin =
+      options.realtimeOrigin ??
+      process.env.RT_ORIGIN_SERVICE ??
+      "http://localhost:2567";
     const realtimeUrl = new URL(realtimeOrigin);
     const localWsUrl = toWebSocketOrigin(requestOrigin);
     localWsUrl.port = realtimeUrl.port || "2567";
-    localWsUrl.pathname = realtimeUrl.pathname === "/" ? "" : realtimeUrl.pathname.replace(/\/$/, "");
+    localWsUrl.pathname =
+      realtimeUrl.pathname === "/"
+        ? ""
+        : realtimeUrl.pathname.replace(/\/$/, "");
     localWsUrl.search = "";
     localWsUrl.hash = "";
     return localWsUrl.toString().replace(/\/$/, "");
   }
 
-  const tunnelHost = process.env.RT_HOST_HEADER?.trim();
+  const tunnelHost =
+    options.tunnelHost?.trim() ?? process.env.RT_HOST_HEADER?.trim();
 
   if (tunnelHost) {
     const tunnelWsUrl = toWebSocketOrigin(requestOrigin);
     tunnelWsUrl.host = tunnelHost;
-    tunnelWsUrl.pathname = fallbackUrl.pathname === "/" ? "" : fallbackUrl.pathname.replace(/\/$/, "");
+    tunnelWsUrl.pathname =
+      fallbackUrl.pathname === "/"
+        ? ""
+        : fallbackUrl.pathname.replace(/\/$/, "");
     tunnelWsUrl.search = "";
     tunnelWsUrl.hash = "";
     return tunnelWsUrl.toString().replace(/\/$/, "");
@@ -58,40 +115,41 @@ async function createOneTimeToken(headers: Headers) {
     throw new Error("Unauthorized.");
   }
 
-  const authOrigin = getRequestOrigin(headers);
+  const authOrigin = resolveAppOrigin(headers);
   const sessionResponse = await fetch(`${authOrigin}/api/auth/get-session`, {
     method: "GET",
     headers: {
-      cookie
+      cookie,
     },
-    cache: "no-store"
+    cache: "no-store",
   });
 
   if (!sessionResponse.ok) {
     throw new Error("Unauthorized.");
   }
 
-  const session = (await sessionResponse.json()) as
-    | {
-        user: {
-          id: string;
-          name: string;
-        };
-      }
-    | null;
+  const session = (await sessionResponse.json()) as {
+    user: {
+      id: string;
+      name: string;
+    };
+  } | null;
 
   if (!session) {
     throw new Error("Unauthorized.");
   }
 
   await ensurePlayerProfile(session.user);
-  const response = await fetch(`${authOrigin}/api/auth/one-time-token/generate`, {
-    method: "GET",
-    headers: {
-      cookie
+  const response = await fetch(
+    `${authOrigin}/api/auth/one-time-token/generate`,
+    {
+      method: "GET",
+      headers: {
+        cookie,
+      },
+      cache: "no-store",
     },
-    cache: "no-store"
-  });
+  );
 
   if (!response.ok) {
     throw new Error("Unable to generate one-time token.");
@@ -101,15 +159,19 @@ async function createOneTimeToken(headers: Headers) {
   return payload.token;
 }
 
-async function callGameServer(headers: Headers, path: string, body: Record<string, unknown>) {
+async function callGameServer(
+  headers: Headers,
+  path: string,
+  body: Record<string, unknown>,
+) {
   const response = await fetch(`${env.GAME_SERVER_INTERNAL_URL}${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-service-key": env.GAME_SERVICE_KEY
+      "x-service-key": env.GAME_SERVICE_KEY,
     },
     body: JSON.stringify(body),
-    cache: "no-store"
+    cache: "no-store",
   });
 
   const payload = await response.json();
@@ -122,7 +184,7 @@ async function callGameServer(headers: Headers, path: string, body: Record<strin
 
   return {
     ...ticketBundle,
-    wsEndpoint: resolveTicketWsEndpoint(headers, ticketBundle.wsEndpoint)
+    wsEndpoint: resolveTicketWsEndpoint(headers, ticketBundle.wsEndpoint),
   };
 }
 
@@ -138,13 +200,16 @@ export async function createPrivateTicket(headers: Headers) {
 
 export async function getGameMetrics() {
   try {
-    const response = await fetch(`${env.GAME_SERVER_INTERNAL_URL}/internal/metrics`, {
-      method: "GET",
-      headers: {
-        "x-service-key": env.GAME_SERVICE_KEY
+    const response = await fetch(
+      `${env.GAME_SERVER_INTERNAL_URL}/internal/metrics`,
+      {
+        method: "GET",
+        headers: {
+          "x-service-key": env.GAME_SERVICE_KEY,
+        },
+        next: { revalidate: 10 },
       },
-      next: { revalidate: 10 }
-    });
+    );
 
     if (!response.ok) {
       return { rooms: 0, players: 0 };
@@ -158,5 +223,8 @@ export async function getGameMetrics() {
 
 export async function joinPrivateTicket(headers: Headers, roomCode: string) {
   const oneTimeToken = await createOneTimeToken(headers);
-  return callGameServer(headers, "/internal/tickets/private/join", { oneTimeToken, roomCode });
+  return callGameServer(headers, "/internal/tickets/private/join", {
+    oneTimeToken,
+    roomCode,
+  });
 }

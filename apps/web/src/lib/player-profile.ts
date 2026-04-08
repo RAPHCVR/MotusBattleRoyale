@@ -1,7 +1,4 @@
-import {
-  createAvatarSeed,
-  sanitizeDisplayName,
-} from "@motus/game-core";
+import { createAvatarSeed, sanitizeDisplayName } from "@motus/game-core";
 import type { PoolClient } from "pg";
 
 import { env } from "./env";
@@ -10,7 +7,7 @@ import {
   getLocalDevLeaderboard,
   isLocalDatabaseConnectionError,
   mergeLocalDevPlayerProfiles,
-  upsertLocalDevPlayerProfile
+  upsertLocalDevPlayerProfile,
 } from "./local-dev-store";
 
 export interface PlayerProfile {
@@ -23,7 +20,10 @@ export interface PlayerProfile {
   bestFinish: number | null;
 }
 
-export async function ensurePlayerProfile(user: { id: string; name: string }): Promise<PlayerProfile> {
+export async function ensurePlayerProfile(user: {
+  id: string;
+  name: string;
+}): Promise<PlayerProfile> {
   const displayName = sanitizeDisplayName(user.name, "Guest Nova");
   const avatarSeed = createAvatarSeed(user.id);
 
@@ -47,7 +47,7 @@ export async function ensurePlayerProfile(user: { id: string; name: string }): P
           updated_at = NOW()
         RETURNING user_id, display_name, avatar_seed, mmr, wins, matches_played, best_finish
       `,
-      [user.id, displayName, avatarSeed]
+      [user.id, displayName, avatarSeed],
     );
 
     const row = result.rows[0];
@@ -58,14 +58,17 @@ export async function ensurePlayerProfile(user: { id: string; name: string }): P
       mmr: row.mmr,
       wins: row.wins,
       matchesPlayed: row.matches_played,
-      bestFinish: row.best_finish
+      bestFinish: row.best_finish,
     };
   } catch (error) {
-    if (env.LOCAL_STORAGE_FALLBACK_ENABLED && isLocalDatabaseConnectionError(error)) {
+    if (
+      env.LOCAL_STORAGE_FALLBACK_ENABLED &&
+      isLocalDatabaseConnectionError(error)
+    ) {
       return upsertLocalDevPlayerProfile({
         userId: user.id,
         displayName,
-        avatarSeed
+        avatarSeed,
       });
     }
 
@@ -90,7 +93,7 @@ export async function getLeaderboard(limit = 24): Promise<PlayerProfile[]> {
         ORDER BY mmr DESC, wins DESC, matches_played DESC
         LIMIT $1
       `,
-      [limit]
+      [limit],
     );
 
     return result.rows.map((row) => ({
@@ -100,10 +103,13 @@ export async function getLeaderboard(limit = 24): Promise<PlayerProfile[]> {
       mmr: row.mmr,
       wins: row.wins,
       matchesPlayed: row.matches_played,
-      bestFinish: row.best_finish
+      bestFinish: row.best_finish,
     }));
   } catch (error) {
-    if (env.LOCAL_STORAGE_FALLBACK_ENABLED && isLocalDatabaseConnectionError(error)) {
+    if (
+      env.LOCAL_STORAGE_FALLBACK_ENABLED &&
+      isLocalDatabaseConnectionError(error)
+    ) {
       return getLocalDevLeaderboard(limit);
     }
 
@@ -111,15 +117,18 @@ export async function getLeaderboard(limit = 24): Promise<PlayerProfile[]> {
   }
 }
 
-export async function migrateAnonymousProfile(fromUserId: string, toUserId: string): Promise<void> {
+export async function migrateAnonymousProfile(
+  fromUserId: string,
+  toUserId: string,
+): Promise<void> {
   try {
     const client: PoolClient = await pgPool.connect();
 
     try {
-    await client.query("BEGIN");
+      await client.query("BEGIN");
 
-    await client.query(
-      `
+      await client.query(
+        `
         INSERT INTO player_profile (user_id, display_name, avatar_seed, mmr, wins, matches_played, best_finish)
         SELECT $2, display_name, avatar_seed, mmr, wins, matches_played, best_finish
         FROM player_profile
@@ -129,20 +138,31 @@ export async function migrateAnonymousProfile(fromUserId: string, toUserId: stri
           display_name = EXCLUDED.display_name,
           avatar_seed = EXCLUDED.avatar_seed,
           mmr = GREATEST(player_profile.mmr, EXCLUDED.mmr),
-          wins = GREATEST(player_profile.wins, EXCLUDED.wins),
-          matches_played = GREATEST(player_profile.matches_played, EXCLUDED.matches_played),
+          wins = COALESCE(player_profile.wins, 0) + COALESCE(EXCLUDED.wins, 0),
+          matches_played = COALESCE(player_profile.matches_played, 0) + COALESCE(EXCLUDED.matches_played, 0),
           best_finish = COALESCE(LEAST(player_profile.best_finish, EXCLUDED.best_finish), player_profile.best_finish, EXCLUDED.best_finish),
           updated_at = NOW()
       `,
-      [fromUserId, toUserId]
-    );
+        [fromUserId, toUserId],
+      );
 
-    await client.query(`DELETE FROM player_profile WHERE user_id = $1`, [fromUserId]);
-    await client.query(`UPDATE match_player SET user_id = $2 WHERE user_id = $1`, [fromUserId, toUserId]);
-    await client.query(`UPDATE "match" SET winner_user_id = $2 WHERE winner_user_id = $1`, [fromUserId, toUserId]);
-    await client.query(`UPDATE sanction SET user_id = $2 WHERE user_id = $1`, [fromUserId, toUserId]);
+      await client.query(`DELETE FROM player_profile WHERE user_id = $1`, [
+        fromUserId,
+      ]);
+      await client.query(
+        `UPDATE match_player SET user_id = $2 WHERE user_id = $1`,
+        [fromUserId, toUserId],
+      );
+      await client.query(
+        `UPDATE "match" SET winner_user_id = $2 WHERE winner_user_id = $1`,
+        [fromUserId, toUserId],
+      );
+      await client.query(
+        `UPDATE sanction SET user_id = $2 WHERE user_id = $1`,
+        [fromUserId, toUserId],
+      );
 
-    await client.query("COMMIT");
+      await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
       throw error;
@@ -150,7 +170,10 @@ export async function migrateAnonymousProfile(fromUserId: string, toUserId: stri
       client.release();
     }
   } catch (error) {
-    if (env.LOCAL_STORAGE_FALLBACK_ENABLED && isLocalDatabaseConnectionError(error)) {
+    if (
+      env.LOCAL_STORAGE_FALLBACK_ENABLED &&
+      isLocalDatabaseConnectionError(error)
+    ) {
       await mergeLocalDevPlayerProfiles(fromUserId, toUserId);
       return;
     }

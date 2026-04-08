@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { buildLetterFeedback, computeRoundScore, createMatchRounds, getCutCount, getFinalists } from "../src/index.ts";
+import {
+  buildLetterFeedback,
+  computeRoundScore,
+  createMatchRounds,
+  getCutCount,
+  getFinalists,
+} from "../src/index.ts";
 
 describe("game-core", () => {
   it("handles repeated letters in feedback", () => {
-    expect(buildLetterFeedback("BALLE", "LABEL")).toEqual(["present", "correct", "present", "present", "present"]);
+    expect(buildLetterFeedback("BALLE", "LABEL")).toEqual([
+      "present",
+      "correct",
+      "present",
+      "present",
+      "present",
+    ]);
   });
 
   it("computes scores with bonuses and penalties", () => {
@@ -17,8 +29,8 @@ describe("game-core", () => {
         modifier: "double-down",
         bountyLetter: "A",
         guess: "BANANE",
-        clueUsed: true
-      }).total
+        clueUsed: true,
+      }).total,
     ).toBe(163);
   });
 
@@ -26,16 +38,10 @@ describe("game-core", () => {
     expect(createMatchRounds("match-seed")).toHaveLength(7);
   });
 
-  it("uses longer round timers for live play readability", () => {
-    expect(createMatchRounds("match-seed").map((round) => round.durationMs)).toEqual([
-      70_000,
-      70_000,
-      65_000,
-      60_000,
-      50_000,
-      45_000,
-      35_000
-    ]);
+  it("uses extended round timers for live play readability", () => {
+    expect(
+      createMatchRounds("match-seed").map((round) => round.durationMs),
+    ).toEqual([120_000, 120_000, 110_000, 100_000, 60_000, 80_000, 70_000]);
   });
 
   it("cuts 25 percent of players", () => {
@@ -44,11 +50,14 @@ describe("game-core", () => {
   });
 
   it("returns finalists by score", () => {
-    expect(getFinalists([{ score: 1 }, { score: 8 }, { score: 4 }, { score: 9 }, { score: 2 }])).toEqual([
-      { score: 9 },
-      { score: 8 },
-      { score: 4 },
-      { score: 2 }
-    ]);
+    expect(
+      getFinalists([
+        { score: 1 },
+        { score: 8 },
+        { score: 4 },
+        { score: 9 },
+        { score: 2 },
+      ]),
+    ).toEqual([{ score: 9 }, { score: 8 }, { score: 4 }, { score: 2 }]);
   });
 });

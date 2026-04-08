@@ -1,4 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  open,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -17,11 +25,17 @@ interface LocalDevStoreData {
 }
 
 const DEFAULT_STORE_DATA: LocalDevStoreData = {
-  playerProfiles: []
+  playerProfiles: [],
 };
+const STORE_LOCK_RETRY_MS = 50;
+const STORE_STALE_LOCK_MS = 10_000;
+const STORE_LOCK_TIMEOUT_MS = 2_500;
 
 function getStorePath() {
-  return process.env.MOTUS_LOCAL_DEV_DATA_PATH ?? path.join(os.tmpdir(), "motus-royale-local-dev-store.json");
+  return (
+    process.env.MOTUS_LOCAL_DEV_DATA_PATH ??
+    path.join(os.tmpdir(), "motus-royale-local-dev-store.json")
+  );
 }
 
 async function readStore(): Promise<LocalDevStoreData> {
@@ -30,12 +44,17 @@ async function readStore(): Promise<LocalDevStoreData> {
     const parsed = JSON.parse(raw) as Partial<LocalDevStoreData>;
 
     return {
-      playerProfiles: Array.isArray(parsed.playerProfiles) ? parsed.playerProfiles : []
+      playerProfiles: Array.isArray(parsed.playerProfiles)
+        ? parsed.playerProfiles
+        : [],
     };
   } catch (error) {
-    const code = error && typeof error === "object" && "code" in error ? String(error.code) : null;
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : null;
 
-    if (code === "ENOENT") {
+    if (code === "ENOENT" || error instanceof SyntaxError) {
       return structuredClone(DEFAULT_STORE_DATA);
     }
 
@@ -45,8 +64,10 @@ async function readStore(): Promise<LocalDevStoreData> {
 
 async function writeStore(store: LocalDevStoreData) {
   const storePath = getStorePath();
+  const tempPath = `${storePath}.${process.pid}.${Date.now()}.tmp`;
   await mkdir(path.dirname(storePath), { recursive: true });
-  await writeFile(storePath, JSON.stringify(store, null, 2), "utf8");
+  await writeFile(tempPath, JSON.stringify(store, null, 2), "utf8");
+  await rename(tempPath, storePath);
 }
 
 function sortProfiles(profiles: LocalDevPlayerProfile[]) {
@@ -61,6 +82,80 @@ function sortProfiles(profiles: LocalDevPlayerProfile[]) {
 
     return right.matchesPlayed - left.matchesPlayed;
   });
+}
+
+function sleep(durationMs: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
+}
+
+async function acquireStoreLock(storePath: string) {
+  const lockPath = `${storePath}.lock`;
+  const deadline = Date.now() + STORE_LOCK_TIMEOUT_MS;
+
+  while (true) {
+    try {
+      const handle = await open(lockPath, "wx");
+
+      return async () => {
+        await handle.close();
+        await rm(lockPath, { force: true }).catch(() => undefined);
+      };
+    } catch (error) {
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? String(error.code)
+          : null;
+
+      if (code !== "EEXIST") {
+        throw error;
+      }
+
+      try {
+        const currentLock = await stat(lockPath);
+
+        if (Date.now() - currentLock.mtimeMs > STORE_STALE_LOCK_MS) {
+          await rm(lockPath, { force: true });
+          continue;
+        }
+      } catch (statError) {
+        const statCode =
+          statError && typeof statError === "object" && "code" in statError
+            ? String(statError.code)
+            : null;
+
+        if (statCode !== "ENOENT") {
+          throw statError;
+        }
+      }
+
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `Timed out while waiting for local dev store lock at ${lockPath}.`,
+        );
+      }
+
+      await sleep(STORE_LOCK_RETRY_MS);
+    }
+  }
+}
+
+async function updateStore<T>(
+  mutate: (store: LocalDevStoreData) => Promise<T> | T,
+) {
+  const storePath = getStorePath();
+  const release = await acquireStoreLock(storePath);
+
+  try {
+    const store = await readStore();
+    const result = await mutate(store);
+    store.playerProfiles = sortProfiles(store.playerProfiles);
+    await writeStore(store);
+    return result;
+  } finally {
+    await release();
+  }
 }
 
 export function isLocalDatabaseConnectionError(error: unknown): boolean {
@@ -109,29 +204,30 @@ export async function upsertLocalDevPlayerProfile(input: {
   displayName: string;
   avatarSeed: string;
 }) {
-  const store = await readStore();
-  const existing = store.playerProfiles.find((profile) => profile.userId === input.userId);
+  return updateStore((store) => {
+    const existing = store.playerProfiles.find(
+      (profile) => profile.userId === input.userId,
+    );
 
-  if (existing) {
-    existing.displayName = input.displayName;
-    existing.avatarSeed = input.avatarSeed;
-    await writeStore(store);
-    return existing;
-  }
+    if (existing) {
+      existing.displayName = input.displayName;
+      existing.avatarSeed = input.avatarSeed;
+      return existing;
+    }
 
-  const created: LocalDevPlayerProfile = {
-    userId: input.userId,
-    displayName: input.displayName,
-    avatarSeed: input.avatarSeed,
-    mmr: 1200,
-    wins: 0,
-    matchesPlayed: 0,
-    bestFinish: null
-  };
+    const created: LocalDevPlayerProfile = {
+      userId: input.userId,
+      displayName: input.displayName,
+      avatarSeed: input.avatarSeed,
+      mmr: 1200,
+      wins: 0,
+      matchesPlayed: 0,
+      bestFinish: null,
+    };
 
-  store.playerProfiles.push(created);
-  await writeStore(store);
-  return created;
+    store.playerProfiles.push(created);
+    return created;
+  });
 }
 
 export async function getLocalDevLeaderboard(limit = 24) {
@@ -139,43 +235,54 @@ export async function getLocalDevLeaderboard(limit = 24) {
   return sortProfiles(store.playerProfiles).slice(0, limit);
 }
 
-export async function mergeLocalDevPlayerProfiles(fromUserId: string, toUserId: string) {
+export async function mergeLocalDevPlayerProfiles(
+  fromUserId: string,
+  toUserId: string,
+) {
   if (fromUserId === toUserId) {
     return;
   }
 
-  const store = await readStore();
-  const fromProfile = store.playerProfiles.find((profile) => profile.userId === fromUserId);
-
-  if (!fromProfile) {
-    return;
-  }
-
-  const targetIndex = store.playerProfiles.findIndex((profile) => profile.userId === toUserId);
-
-  if (targetIndex === -1) {
-    store.playerProfiles = store.playerProfiles.map((profile) =>
-      profile.userId === fromUserId
-        ? {
-            ...profile,
-            userId: toUserId
-          }
-        : profile
+  await updateStore((store) => {
+    const fromProfile = store.playerProfiles.find(
+      (profile) => profile.userId === fromUserId,
     );
-    await writeStore(store);
-    return;
-  }
 
-  const targetProfile = store.playerProfiles[targetIndex]!;
-  targetProfile.displayName = targetProfile.displayName || fromProfile.displayName;
-  targetProfile.avatarSeed = targetProfile.avatarSeed || fromProfile.avatarSeed;
-  targetProfile.mmr = Math.max(targetProfile.mmr, fromProfile.mmr);
-  targetProfile.wins = Math.max(targetProfile.wins, fromProfile.wins);
-  targetProfile.matchesPlayed = Math.max(targetProfile.matchesPlayed, fromProfile.matchesPlayed);
-  targetProfile.bestFinish = [targetProfile.bestFinish, fromProfile.bestFinish]
-    .filter((value): value is number => typeof value === "number")
-    .sort((left, right) => left - right)[0] ?? null;
+    if (!fromProfile) {
+      return;
+    }
 
-  store.playerProfiles = store.playerProfiles.filter((profile) => profile.userId !== fromUserId);
-  await writeStore(store);
+    const targetIndex = store.playerProfiles.findIndex(
+      (profile) => profile.userId === toUserId,
+    );
+
+    if (targetIndex === -1) {
+      store.playerProfiles = store.playerProfiles.map((profile) =>
+        profile.userId === fromUserId
+          ? {
+              ...profile,
+              userId: toUserId,
+            }
+          : profile,
+      );
+      return;
+    }
+
+    const targetProfile = store.playerProfiles[targetIndex]!;
+    targetProfile.displayName =
+      targetProfile.displayName || fromProfile.displayName;
+    targetProfile.avatarSeed =
+      targetProfile.avatarSeed || fromProfile.avatarSeed;
+    targetProfile.mmr = Math.max(targetProfile.mmr, fromProfile.mmr);
+    targetProfile.wins += fromProfile.wins;
+    targetProfile.matchesPlayed += fromProfile.matchesPlayed;
+    targetProfile.bestFinish =
+      [targetProfile.bestFinish, fromProfile.bestFinish]
+        .filter((value): value is number => typeof value === "number")
+        .sort((left, right) => left - right)[0] ?? null;
+
+    store.playerProfiles = store.playerProfiles.filter(
+      (profile) => profile.userId !== fromUserId,
+    );
+  });
 }
