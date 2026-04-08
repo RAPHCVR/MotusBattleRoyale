@@ -323,10 +323,9 @@ export function PlayShell() {
   const canToggleFullscreen = isFullscreenSupported || prefersTouchInput;
   const fullscreenScrollable = fullscreenActive && !isLiveRound;
   const fullscreenButtonLabel = fullscreenActive ? (prefersTouchInput ? "Quitter" : "Quitter le plein écran") : "Plein écran";
-  const stickyTouchDock = isLiveRound && prefersTouchInput && !fullscreenActive;
   const nativeKeyboardInset = prefersTouchInput ? viewportInsetBottom : 0;
   const nativeKeyboardActive = isLiveRound && prefersTouchInput && isInputFocused && !showTouchKeyboard && nativeKeyboardInset > 0;
-  const nativeKeyboardScrollPadding = nativeKeyboardActive && !fullscreenActive ? nativeKeyboardInset + 24 : 0;
+  const mobilePinnedDock = isLiveRound && prefersTouchInput && (!fullscreenActive || nativeKeyboardActive);
   const roomCodeLabel = roomSnapshot?.roomCode ?? "Public";
   const matchInfoTitle =
     roomPhase === "results"
@@ -413,8 +412,8 @@ export function PlayShell() {
         : "max(22rem, min(31rem, calc(100dvh - 21rem)))"
     : "34rem";
   const virtualKeyboardMaxWidth = compactTouchKeyboardVisible ? "min(100%, 19rem)" : compactTouchRound ? "min(100%, 20rem)" : compactDesktopKeyboard ? "min(100%, 24rem)" : "34rem";
-  const mobileStickyDockSpacing = stickyTouchDock ? liveDockHeight + nativeKeyboardInset + 12 : 0;
-  const stickyTouchDockOffset = stickyTouchDock ? nativeKeyboardInset : 0;
+  const mobilePinnedDockSpacing = mobilePinnedDock ? liveDockHeight + nativeKeyboardInset + 12 : 0;
+  const mobilePinnedDockOffset = mobilePinnedDock ? nativeKeyboardInset : 0;
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 250);
@@ -462,7 +461,7 @@ export function PlayShell() {
   useEffect(() => {
     const liveDockElement = liveDockRef.current;
 
-    if (!liveDockElement || !stickyTouchDock) {
+    if (!liveDockElement || !mobilePinnedDock) {
       setLiveDockHeight(0);
       return;
     }
@@ -486,7 +485,7 @@ export function PlayShell() {
     return () => {
       observer.disconnect();
     };
-  }, [stickyTouchDock]);
+  }, [mobilePinnedDock]);
 
   useEffect(() => {
     const canFullscreen = Boolean(document.fullscreenEnabled && playSurfaceRef.current?.requestFullscreen);
@@ -553,62 +552,25 @@ export function PlayShell() {
       return;
     }
 
-    const input = guessInputRef.current;
-    const target = liveDockRef.current ?? input;
-    const scrollContainer = fullscreenActive || nativeKeyboardActive ? playSurfaceRef.current : document.querySelector("main");
+    const target = liveDockRef.current ?? guessInputRef.current;
 
-    if (!input || !target) {
+    if (!target) {
       return;
     }
 
-    let cancelled = false;
-
     const syncFocusedInput = () => {
-      if (cancelled) {
-        return;
-      }
-
-      const visualViewport = window.visualViewport;
-      const viewportTop = Math.round(visualViewport?.offsetTop ?? 0);
-      const viewportBottom = viewportTop + Math.round(visualViewport?.height ?? window.innerHeight);
-      const targetRect = target.getBoundingClientRect();
-      const overflowBottom = targetRect.bottom - (viewportBottom - 12);
-
-      if (overflowBottom > 0) {
-        if (scrollContainer instanceof HTMLElement) {
-          scrollContainer.scrollBy({
-            top: overflowBottom + 20,
-            behavior: "smooth"
-          });
-        } else {
-          window.scrollBy({
-            top: overflowBottom + 20,
-            behavior: "smooth"
-          });
-        }
-      } else {
-        input.scrollIntoView({
-          block: fullscreenActive ? "center" : "nearest",
-          inline: "nearest"
-        });
-      }
+      target.scrollIntoView({
+        block: nativeKeyboardActive ? "end" : fullscreenActive ? "center" : "nearest",
+        inline: "nearest"
+      });
     };
 
-    const handleViewportChange = () => {
-      window.requestAnimationFrame(syncFocusedInput);
-    };
-
-    const timeout = window.setTimeout(handleViewportChange, 60);
+    const timeout = window.setTimeout(syncFocusedInput, nativeKeyboardActive ? 90 : 0);
     const frame = window.requestAnimationFrame(syncFocusedInput);
-    window.visualViewport?.addEventListener("resize", handleViewportChange);
-    window.visualViewport?.addEventListener("scroll", handleViewportChange);
 
     return () => {
-      cancelled = true;
       window.clearTimeout(timeout);
       window.cancelAnimationFrame(frame);
-      window.visualViewport?.removeEventListener("resize", handleViewportChange);
-      window.visualViewport?.removeEventListener("scroll", handleViewportChange);
     };
   }, [fullscreenActive, isInputFocused, nativeKeyboardActive, prefersTouchInput, showTouchKeyboard, viewportHeight, viewportInsetBottom]);
 
@@ -1102,24 +1064,13 @@ export function PlayShell() {
         "flex min-h-0 flex-1 flex-col",
         isLiveRound && "h-full overflow-hidden",
         fullscreenActive && "fixed inset-x-0 top-0 z-[80] w-screen bg-[#040811]",
-        fullscreenScrollable && "overflow-y-auto",
-        nativeKeyboardActive && "overflow-y-auto"
+        fullscreenScrollable && "overflow-y-auto"
       )}
       style={
-        fullscreenActive || nativeKeyboardScrollPadding
+        fullscreenActive
           ? {
-              ...(fullscreenActive
-                ? {
-                    top: `${viewportOffsetTop}px`,
-                    height: viewportHeight > 0 ? `${viewportHeight}px` : undefined
-                  }
-                : undefined),
-              ...(nativeKeyboardScrollPadding
-                ? {
-                    paddingBottom: `${nativeKeyboardScrollPadding}px`,
-                    scrollPaddingBottom: `${nativeKeyboardScrollPadding + 16}px`
-                  }
-                : undefined)
+              top: `${viewportOffsetTop}px`,
+              height: viewportHeight > 0 ? `${viewportHeight}px` : undefined
             }
           : undefined
       }
@@ -1430,9 +1381,11 @@ export function PlayShell() {
                     className={clsx(
                       "min-h-0 rounded-[30px] border border-white/8 bg-slate-950/72",
                       compactTouchRound ? "relative p-2.5" : compactTouchRoomShell ? "p-3" : compactLiveRound ? "p-3" : "p-4 sm:p-5",
-                      isLiveRound && "flex h-full flex-col overflow-hidden",
+                      isLiveRound && "flex h-full flex-col",
+                      isLiveRound && (mobilePinnedDock ? "overflow-y-auto overscroll-y-contain" : "overflow-hidden"),
                       compactTouchRound && fullscreenActive && "flex-1"
                     )}
+                    style={mobilePinnedDockSpacing ? { scrollPaddingBottom: `${mobilePinnedDockSpacing + 16}px` } : undefined}
                   >
                     <div
                       className={clsx(
@@ -1533,7 +1486,7 @@ export function PlayShell() {
                         isLiveRound && "min-h-0 flex-1",
                         compactTouchRound && "flex items-start justify-center pt-1 pb-2"
                       )}
-                      style={mobileStickyDockSpacing ? { paddingBottom: `${mobileStickyDockSpacing}px` } : undefined}
+                      style={mobilePinnedDockSpacing ? { paddingBottom: `${mobilePinnedDockSpacing}px` } : undefined}
                     >
                       {boardIsStale ? (
                         <div className="mx-auto w-full max-w-[34rem] rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-8 text-center">
@@ -1579,15 +1532,15 @@ export function PlayShell() {
                         ref={liveDockRef}
                         className={clsx(
                           "z-30 mx-auto w-full",
-                          compactTouchRound
-                            ? "mt-auto shrink-0 pt-3"
-                            : prefersTouchInput
-                              ? "sticky bottom-0 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
+                          mobilePinnedDock
+                            ? "sticky bottom-0 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
+                            : compactTouchRound
+                              ? "mt-auto shrink-0 pt-3"
                               : "mt-auto pt-2"
                         )}
                         style={{
                           maxWidth: liveDockMaxWidth,
-                          ...(stickyTouchDockOffset ? { bottom: `${stickyTouchDockOffset}px` } : undefined)
+                          ...(mobilePinnedDockOffset ? { bottom: `${mobilePinnedDockOffset}px` } : undefined)
                         }}
                       >
                         <div
