@@ -1,5 +1,9 @@
 FROM node:24-bookworm-slim AS base
 
+ARG SOURCE_REPOSITORY=https://github.com/RAPHCVR/MotusBattleRoyale
+ARG BUILD_VERSION=0.1.0
+ARG BUILD_REVISION=unknown
+
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
@@ -29,7 +33,7 @@ COPY packages/game-core/package.json packages/game-core/package.json
 COPY packages/protocol/package.json packages/protocol/package.json
 COPY packages/ui/package.json packages/ui/package.json
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts --package-import-method=copy
 
 COPY . .
 
@@ -37,20 +41,31 @@ RUN pnpm --filter @motus/web build
 
 FROM node:24-bookworm-slim AS runner
 
+ARG SOURCE_REPOSITORY=https://github.com/RAPHCVR/MotusBattleRoyale
+ARG BUILD_VERSION=0.1.0
+ARG BUILD_REVISION=unknown
+
+LABEL org.opencontainers.image.source=$SOURCE_REPOSITORY \
+      org.opencontainers.image.version=$BUILD_VERSION \
+      org.opencontainers.image.revision=$BUILD_REVISION
+
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+ENV NEXT_TELEMETRY_DISABLED=1
 
 WORKDIR /app
 
-COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /app/apps/web/public ./apps/web/public
-COPY --from=builder /app/node_modules/.pnpm/french-wordlist@1.0.0/node_modules/french-wordlist ./node_modules/french-wordlist
-COPY --from=builder /app/node_modules/.pnpm/french-badwords-list@1.0.7/node_modules/french-badwords-list ./node_modules/french-badwords-list
-COPY --from=builder /app/node_modules/.pnpm/french-wordlist@1.0.0/node_modules/french-wordlist ./packages/dictionary/node_modules/french-wordlist
-COPY --from=builder /app/node_modules/.pnpm/french-badwords-list@1.0.7/node_modules/french-badwords-list ./packages/dictionary/node_modules/french-badwords-list
+COPY --from=builder --chown=node:node /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=node:node /app/apps/web/public ./apps/web/public
+COPY --from=builder --chown=node:node /app/node_modules/.pnpm/french-wordlist@1.0.0/node_modules/french-wordlist ./node_modules/french-wordlist
+COPY --from=builder --chown=node:node /app/node_modules/.pnpm/french-badwords-list@1.0.7/node_modules/french-badwords-list ./node_modules/french-badwords-list
+COPY --from=builder --chown=node:node /app/node_modules/.pnpm/french-wordlist@1.0.0/node_modules/french-wordlist ./packages/dictionary/node_modules/french-wordlist
+COPY --from=builder --chown=node:node /app/node_modules/.pnpm/french-badwords-list@1.0.7/node_modules/french-badwords-list ./packages/dictionary/node_modules/french-badwords-list
 
 EXPOSE 3000
+
+USER node
 
 CMD ["node", "apps/web/server.js"]

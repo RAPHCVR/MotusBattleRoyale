@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+patches:
+  - path: runtime-config.patch.yaml
+  - path: ingress.patch.yaml
+
+images:
+  - name: motus-web
+    newName: ghcr.io/raphcvr/motusbattleroyale-web
+    newTag: latest
+  - name: motus-game
+    newName: ghcr.io/raphcvr/motusbattleroyale-game
+    newTag: latest

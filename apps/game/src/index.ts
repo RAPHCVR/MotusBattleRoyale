@@ -16,6 +16,7 @@ import { privateRoomJoinRequestSchema, ticketBundleSchema } from "@motus/protoco
 
 import { issueGameToken, verifyOneTimeToken } from "./lib/auth.js";
 import { corsOrigins, env } from "./lib/env.js";
+import { getReadyStatus } from "./lib/health.js";
 import { getOrCreatePlayerProfile } from "./lib/store.js";
 import { PrivateLobbyRoom } from "./rooms/PrivateLobbyRoom.js";
 import { PublicQueueRoom } from "./rooms/PublicQueueRoom.js";
@@ -184,6 +185,16 @@ function configureHttp(app: express.Application) {
   app.get("/healthz", (_request: express.Request, response: express.Response) => {
     response.json({
       ok: true,
+      processId: matchMaker.processId,
+      time: new Date().toISOString()
+    });
+  });
+
+  app.get("/readyz", async (_request: express.Request, response: express.Response) => {
+    const ready = await getReadyStatus();
+
+    response.status(ready.ok ? 200 : 503).json({
+      ...ready,
       processId: matchMaker.processId,
       time: new Date().toISOString()
     });

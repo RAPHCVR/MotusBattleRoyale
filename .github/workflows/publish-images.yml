@@ -1,0 +1,99 @@
+name: publish-images
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/publish-images.yml
+      - apps/**
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - turbo.json
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: web
+            image: ghcr.io/${{ github.repository_owner }}/motusbattleroyale-web
+            dockerfile: apps/web/Dockerfile
+          - name: game
+            image: ghcr.io/${{ github.repository_owner }}/motusbattleroyale-game
+            dockerfile: apps/game/Dockerfile
+    env:
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      AUTH_BASE_URL: ${{ vars.AUTH_BASE_URL }}
+      NEXT_PUBLIC_GAME_WS_URL: ${{ vars.NEXT_PUBLIC_GAME_WS_URL }}
+      PASSKEY_RP_ID: ${{ vars.PASSKEY_RP_ID }}
+      PASSKEY_ORIGIN: ${{ vars.PASSKEY_ORIGIN }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute build arguments
+        id: build-args
+        shell: bash
+        run: |
+          if [[ "${{ matrix.name }}" == "web" ]]; then
+            {
+              echo 'args<<ARGS'
+              echo "NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://play-dev.raphcvr.me}"
+              echo "AUTH_BASE_URL=${AUTH_BASE_URL:-https://play-dev.raphcvr.me/api/auth}"
+              echo "NEXT_PUBLIC_GAME_WS_URL=${NEXT_PUBLIC_GAME_WS_URL:-wss://rt-dev.raphcvr.me}"
+              echo "PASSKEY_RP_ID=${PASSKEY_RP_ID:-play-dev.raphcvr.me}"
+              echo "PASSKEY_ORIGIN=${PASSKEY_ORIGIN:-https://play-dev.raphcvr.me}"
+              echo 'ARGS'
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "args=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,prefix=sha-
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            SOURCE_REPOSITORY=${{ github.server_url }}/${{ github.repository }}
+            BUILD_VERSION=${{ github.sha }}
+            BUILD_REVISION=${{ github.sha }}
+            ${{ steps.build-args.outputs.args }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
