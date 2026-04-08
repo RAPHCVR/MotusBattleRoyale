@@ -325,6 +325,8 @@ export function PlayShell() {
   const fullscreenButtonLabel = fullscreenActive ? (prefersTouchInput ? "Quitter" : "Quitter le plein écran") : "Plein écran";
   const stickyTouchDock = isLiveRound && prefersTouchInput && !fullscreenActive;
   const nativeKeyboardInset = prefersTouchInput ? viewportInsetBottom : 0;
+  const nativeKeyboardActive = isLiveRound && prefersTouchInput && isInputFocused && !showTouchKeyboard && nativeKeyboardInset > 0;
+  const nativeKeyboardScrollPadding = nativeKeyboardActive && !fullscreenActive ? nativeKeyboardInset + 24 : 0;
   const roomCodeLabel = roomSnapshot?.roomCode ?? "Public";
   const matchInfoTitle =
     roomPhase === "results"
@@ -552,20 +554,63 @@ export function PlayShell() {
     }
 
     const input = guessInputRef.current;
+    const target = liveDockRef.current ?? input;
+    const scrollContainer = fullscreenActive || nativeKeyboardActive ? playSurfaceRef.current : document.querySelector("main");
 
-    if (!input) {
+    if (!input || !target) {
       return;
     }
 
-    const frame = window.requestAnimationFrame(() => {
-      input.scrollIntoView({
-        block: fullscreenActive ? "center" : "nearest",
-        inline: "nearest"
-      });
-    });
+    let cancelled = false;
 
-    return () => window.cancelAnimationFrame(frame);
-  }, [fullscreenActive, isInputFocused, prefersTouchInput, showTouchKeyboard, viewportHeight, viewportInsetBottom]);
+    const syncFocusedInput = () => {
+      if (cancelled) {
+        return;
+      }
+
+      const visualViewport = window.visualViewport;
+      const viewportTop = Math.round(visualViewport?.offsetTop ?? 0);
+      const viewportBottom = viewportTop + Math.round(visualViewport?.height ?? window.innerHeight);
+      const targetRect = target.getBoundingClientRect();
+      const overflowBottom = targetRect.bottom - (viewportBottom - 12);
+
+      if (overflowBottom > 0) {
+        if (scrollContainer instanceof HTMLElement) {
+          scrollContainer.scrollBy({
+            top: overflowBottom + 20,
+            behavior: "smooth"
+          });
+        } else {
+          window.scrollBy({
+            top: overflowBottom + 20,
+            behavior: "smooth"
+          });
+        }
+      } else {
+        input.scrollIntoView({
+          block: fullscreenActive ? "center" : "nearest",
+          inline: "nearest"
+        });
+      }
+    };
+
+    const handleViewportChange = () => {
+      window.requestAnimationFrame(syncFocusedInput);
+    };
+
+    const timeout = window.setTimeout(handleViewportChange, 60);
+    const frame = window.requestAnimationFrame(syncFocusedInput);
+    window.visualViewport?.addEventListener("resize", handleViewportChange);
+    window.visualViewport?.addEventListener("scroll", handleViewportChange);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+      window.cancelAnimationFrame(frame);
+      window.visualViewport?.removeEventListener("resize", handleViewportChange);
+      window.visualViewport?.removeEventListener("scroll", handleViewportChange);
+    };
+  }, [fullscreenActive, isInputFocused, nativeKeyboardActive, prefersTouchInput, showTouchKeyboard, viewportHeight, viewportInsetBottom]);
 
   useEffect(() => {
     if (!sessionUser && roomRef.current) {
@@ -1057,13 +1102,24 @@ export function PlayShell() {
         "flex min-h-0 flex-1 flex-col",
         isLiveRound && "h-full overflow-hidden",
         fullscreenActive && "fixed inset-x-0 top-0 z-[80] w-screen bg-[#040811]",
-        fullscreenScrollable && "overflow-y-auto"
+        fullscreenScrollable && "overflow-y-auto",
+        nativeKeyboardActive && "overflow-y-auto"
       )}
       style={
-        fullscreenActive
+        fullscreenActive || nativeKeyboardScrollPadding
           ? {
-              top: `${viewportOffsetTop}px`,
-              height: viewportHeight > 0 ? `${viewportHeight}px` : undefined
+              ...(fullscreenActive
+                ? {
+                    top: `${viewportOffsetTop}px`,
+                    height: viewportHeight > 0 ? `${viewportHeight}px` : undefined
+                  }
+                : undefined),
+              ...(nativeKeyboardScrollPadding
+                ? {
+                    paddingBottom: `${nativeKeyboardScrollPadding}px`,
+                    scrollPaddingBottom: `${nativeKeyboardScrollPadding + 16}px`
+                  }
+                : undefined)
             }
           : undefined
       }
