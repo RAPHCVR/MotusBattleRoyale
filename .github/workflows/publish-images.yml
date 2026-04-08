@@ -21,7 +21,6 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-      AUTH_BASE_URL: ${{ vars.AUTH_BASE_URL }}
       NEXT_PUBLIC_GAME_WS_URL: ${{ vars.NEXT_PUBLIC_GAME_WS_URL }}
       PASSKEY_RP_ID: ${{ vars.PASSKEY_RP_ID }}
       PASSKEY_ORIGIN: ${{ vars.PASSKEY_ORIGIN }}
@@ -60,7 +59,6 @@ jobs:
             {
               echo 'args<<ARGS'
               echo "NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://play-dev.raphcvr.me}"
-              echo "AUTH_BASE_URL=${AUTH_BASE_URL:-https://play-dev.raphcvr.me/api/auth}"
               echo "NEXT_PUBLIC_GAME_WS_URL=${NEXT_PUBLIC_GAME_WS_URL:-wss://rt-dev.raphcvr.me}"
               echo "PASSKEY_RP_ID=${PASSKEY_RP_ID:-play-dev.raphcvr.me}"
               echo "PASSKEY_ORIGIN=${PASSKEY_ORIGIN:-https://play-dev.raphcvr.me}"
