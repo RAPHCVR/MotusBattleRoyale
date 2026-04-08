@@ -14,5 +14,6 @@ output
 .playwright-cli
 .kilocode
 .wrangler
+.tmp
 infra/cloudflared/.cloudflared
 infra/cloudflared/config.yml

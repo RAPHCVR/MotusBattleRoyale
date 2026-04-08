@@ -51,23 +51,23 @@
 
 @layer components {
   .page-shell {
-    @apply mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8;
+    @apply mx-auto w-full max-w-7xl px-4 py-4 sm:px-5 sm:py-6 lg:px-8;
   }
 
   .button-primary {
-    @apply inline-flex min-h-12 touch-manipulation items-center justify-center rounded-full border border-cyan-300/40 bg-cyan-300/15 px-4 py-3 text-base font-medium text-cyan-50 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:px-5 sm:text-sm motion-safe:hover:scale-[1.01] hover:border-cyan-200/70 hover:bg-cyan-300/20;
+    @apply inline-flex min-h-[2.75rem] touch-manipulation items-center justify-center rounded-full border border-cyan-300/40 bg-cyan-300/15 px-4 py-2.5 text-[0.95rem] font-medium text-cyan-50 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:min-h-12 sm:px-5 sm:py-3 sm:text-sm motion-safe:hover:scale-[1.01] hover:border-cyan-200/70 hover:bg-cyan-300/20;
   }
 
   .button-secondary {
-    @apply inline-flex min-h-12 touch-manipulation items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-3 text-base font-medium text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/55 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:px-5 sm:text-sm hover:border-white/20 hover:bg-white/10;
+    @apply inline-flex min-h-[2.75rem] touch-manipulation items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[0.95rem] font-medium text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/55 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:min-h-12 sm:px-5 sm:py-3 sm:text-sm hover:border-white/20 hover:bg-white/10;
   }
 
   .button-danger {
-    @apply inline-flex min-h-12 touch-manipulation items-center justify-center rounded-full border border-rose-300/35 bg-rose-400/10 px-4 py-3 text-base font-medium text-rose-100 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200/55 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:px-5 sm:text-sm hover:border-rose-200/60 hover:bg-rose-400/20;
+    @apply inline-flex min-h-[2.75rem] touch-manipulation items-center justify-center rounded-full border border-rose-300/35 bg-rose-400/10 px-4 py-2.5 text-[0.95rem] font-medium text-rose-100 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200/55 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:min-h-12 sm:px-5 sm:py-3 sm:text-sm hover:border-rose-200/60 hover:bg-rose-400/20;
   }
 
   .input-shell {
-    @apply w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3.5 text-base text-white outline-none transition placeholder:text-white/35 focus:border-cyan-300/45 focus:ring-2 focus:ring-cyan-300/15 focus-visible:ring-cyan-200/45 sm:py-3 sm:text-sm;
+    @apply w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-[0.95rem] text-white outline-none transition placeholder:text-white/35 focus:border-cyan-300/45 focus:ring-2 focus:ring-cyan-300/15 focus-visible:ring-cyan-200/45 sm:py-3 sm:text-sm;
   }
 
   .surface-grid {
@@ -78,7 +78,7 @@
   }
 
   .eyebrow {
-    @apply text-[11px] uppercase tracking-[0.38em] text-cyan-200/70;
+    @apply text-[10px] uppercase tracking-[0.28em] text-cyan-200/70 sm:text-[11px] sm:tracking-[0.38em];
   }
 
   .number-tabular {
@@ -86,7 +86,7 @@
   }
 
   .signal-pill {
-    @apply inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.32em];
+    @apply inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.24em] sm:px-3 sm:py-2 sm:text-[10px] sm:tracking-[0.32em];
   }
 
   .signal-pill-live {
@@ -102,11 +102,11 @@
   }
 
   .signal-card {
-    @apply rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(13,22,40,0.9),rgba(6,12,25,0.96))] p-4;
+    @apply rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(13,22,40,0.9),rgba(6,12,25,0.96))] p-3.5 sm:rounded-[24px] sm:p-4;
   }
 
   .arcade-screen {
-    @apply relative overflow-hidden rounded-[30px] border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(6,12,24,0.98),rgba(4,8,18,0.98))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.45)];
+    @apply relative overflow-hidden rounded-[26px] border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(6,12,24,0.98),rgba(4,8,18,0.98))] p-4 shadow-[0_26px_80px_rgba(0,0,0,0.45)] sm:rounded-[30px] sm:p-5;
   }
 
   .arcade-screen::before {

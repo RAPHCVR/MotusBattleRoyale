@@ -14,35 +14,46 @@ export function GlassPanel(props: PropsWithChildren<{ className?: string }>) {
   );
 }
 
-export function MetricBadge(props: { label: string; value: ReactNode; tone?: "default" | "good" | "danger" }) {
+export function MetricBadge(props: { label: string; value: ReactNode; tone?: "default" | "good" | "danger"; compact?: boolean }) {
   return (
     <div
       className={clsx(
-        "min-w-0 rounded-[18px] border px-3 py-2 text-[10px] uppercase tracking-[0.2em] sm:rounded-full sm:px-4 sm:text-xs sm:tracking-[0.28em]",
+        props.compact ? "min-w-0 rounded-[14px] border px-2.5 py-2 sm:rounded-[16px]" : "min-w-0 rounded-[16px] border px-3 py-2.5 sm:rounded-full sm:px-4",
         props.tone === "good" && "border-lime-400/40 bg-lime-400/10 text-lime-200",
         props.tone === "danger" && "border-rose-400/35 bg-rose-400/10 text-rose-100",
         props.tone === "default" && "border-cyan-300/25 bg-cyan-300/10 text-cyan-100"
       )}
     >
-      <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-        <span className="text-white/50">{props.label}</span>
-        <strong className="break-words font-semibold text-white">{props.value}</strong>
-      </div>
+      {props.compact ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className="text-[8px] font-medium uppercase tracking-[0.2em] text-white/55">{props.label}</span>
+          <span aria-hidden="true" className="text-[0.7rem] text-white/20">
+            •
+          </span>
+          <strong className="min-w-0 break-words text-[0.8rem] font-semibold leading-none text-white">{props.value}</strong>
+        </div>
+      ) : (
+        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2.5">
+          <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-white/55 sm:text-[10px] sm:tracking-[0.28em]">{props.label}</span>
+          <span aria-hidden="true" className="hidden h-3 w-px bg-white/10 sm:block" />
+          <strong className="min-w-0 break-words text-sm font-semibold leading-snug text-white sm:text-[0.95rem]">{props.value}</strong>
+        </div>
+      )}
     </div>
   );
 }
 
 export function SectionHeader(props: { eyebrow: string; title: string; body: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <div className="flex flex-col gap-2.5 md:flex-row md:items-end md:justify-between">
       <div className="space-y-2">
-        <p className="text-[11px] uppercase tracking-[0.38em] text-cyan-200/70">{props.eyebrow}</p>
-        <h2 className="text-balance font-display text-2xl font-semibold tracking-tight text-white sm:text-3xl md:text-4xl">
+        <p className="eyebrow">{props.eyebrow}</p>
+        <h2 className="text-balance font-display text-[1.85rem] font-semibold tracking-tight text-white sm:text-3xl md:text-4xl">
           {props.title}
         </h2>
-        <p className="max-w-2xl text-sm leading-6 text-slate-300">{props.body}</p>
+        <p className="max-w-2xl text-[0.95rem] leading-6 text-slate-300 sm:text-sm">{props.body}</p>
       </div>
-      {props.action ? <div className="w-full md:w-auto [&>*]:w-full md:[&>*]:w-auto">{props.action}</div> : null}
+      {props.action ? <div className="w-full md:w-auto md:self-start [&>*]:w-full md:[&>*]:w-auto">{props.action}</div> : null}
     </div>
   );
 }

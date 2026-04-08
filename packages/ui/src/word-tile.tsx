@@ -1,5 +1,4 @@
 import clsx from "clsx";
-import { Check, Circle, Lock, Slash } from "lucide-react";
 
 import type { GuessTileState } from "@motus/protocol";
 
@@ -30,24 +29,19 @@ export function resolveWordTileTone(props: { state?: GuessTileState; hint?: bool
 }
 
 export function FeedbackToneIcon(props: { tone: Exclude<WordTileTone, "idle" | "pending">; className?: string }) {
-  const iconProps = {
-    className: props.className,
-    strokeWidth: 2.4
-  };
-
-  if (props.tone === "correct") {
-    return <Check {...iconProps} />;
-  }
-
-  if (props.tone === "present") {
-    return <Circle {...iconProps} />;
-  }
-
-  if (props.tone === "absent") {
-    return <Slash {...iconProps} />;
-  }
-
-  return <Lock {...iconProps} />;
+  return (
+    <span
+      aria-hidden="true"
+      className={clsx(
+        "inline-block shrink-0 border",
+        props.tone === "correct" && "rounded-[0.32rem] border-lime-100/80 bg-lime-300 shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset]",
+        props.tone === "present" && "rounded-full border-[1.6px] border-amber-100/85 bg-transparent",
+        props.tone === "absent" && "rounded-full border-slate-400/30 bg-slate-500/35",
+        props.tone === "hint" && "rounded-[0.32rem] border-cyan-100/80 bg-cyan-300 shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset]",
+        props.className
+      )}
+    />
+  );
 }
 
 export function WordTile(props: { letter?: string; state?: GuessTileState; hint?: boolean; compact?: boolean; dense?: boolean }) {

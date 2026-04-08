@@ -17,17 +17,17 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="page-shell space-y-6 py-8 md:py-10">
+    <div className="page-shell space-y-5 py-6 md:py-8">
       <SectionHeader
         eyebrow="Admin"
         title="Local → preview → prod sans changer d’architecture"
         body="Cette page sert de contrôle rapide pour les URLs, le RP ID passkey et les dépendances infra attendues autour du site."
       />
 
-      <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-        <GlassPanel className="space-y-4">
-          <h2 className="font-display text-3xl text-white">Checklist</h2>
-          <ul className="space-y-3 text-sm leading-6 text-slate-300">
+      <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <GlassPanel className="space-y-3.5">
+          <h2 className="font-display text-2xl text-white sm:text-3xl">Checklist</h2>
+          <ul className="space-y-2.5 text-sm leading-6 text-slate-300">
             <li>
               1. <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">postgres</code>,{" "}
               <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">redis</code>,{" "}
@@ -46,11 +46,11 @@ export default function AdminPage() {
           </ul>
         </GlassPanel>
 
-        <GlassPanel className="space-y-4">
-          <h2 className="font-display text-3xl text-white">Valeurs runtime</h2>
-          <div className="space-y-3">
+        <GlassPanel className="space-y-3.5">
+          <h2 className="font-display text-2xl text-white sm:text-3xl">Valeurs runtime</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
             {checks.map(([label, value]) => (
-              <div key={label} className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3">
+              <div key={label} className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3.5 py-3">
                 <p className="eyebrow">{label}</p>
                 <p className="mt-2 break-all text-sm text-white">{value}</p>
               </div>
@@ -60,28 +60,28 @@ export default function AdminPage() {
       </div>
 
       <GlassPanel className="space-y-4">
-        <h2 className="font-display text-3xl text-white">Banque de mots</h2>
+        <h2 className="font-display text-2xl text-white sm:text-3xl">Banque de mots</h2>
         <p className="max-w-3xl text-sm leading-6 text-slate-300">
           Les mots solution restent curés pour garder des rounds propres. Les guesses valides, eux, sont contrôlés contre
           une vraie wordlist française filtrée sur les longueurs de partie, avec blacklist anti-profanité normalisée.
         </p>
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3.5">
             <p className="eyebrow">Solutions</p>
             <p className="number-tabular mt-2 text-3xl text-white">{dictionaryStats.solutionCount}</p>
           </div>
-          <div className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-4">
+          <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3.5">
             <p className="eyebrow">Essais autorisés</p>
             <p className="number-tabular mt-2 text-3xl text-white">{dictionaryStats.allowedCount}</p>
           </div>
-          <div className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-4">
+          <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3.5">
             <p className="eyebrow">Termes bloqués</p>
             <p className="number-tabular mt-2 text-3xl text-white">{dictionaryStats.bannedCount}</p>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {dictionaryStats.lengths.map((lengthStats) => (
-            <div key={lengthStats.length} className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-4">
+            <div key={lengthStats.length} className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3.5">
               <p className="eyebrow">{lengthStats.length} lettres</p>
               <p className="mt-2 text-sm text-slate-300">{lengthStats.solutions} solutions curées</p>
               <p className="mt-1 text-sm text-slate-300">{lengthStats.allowed} guesses autorisés</p>

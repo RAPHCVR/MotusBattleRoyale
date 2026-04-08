@@ -80,14 +80,14 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
             "page-shell",
             isPlayRoute
               ? "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2.5 sm:flex sm:flex-row sm:items-center sm:justify-between sm:py-3"
-              : "flex flex-col gap-3 py-4 sm:py-5 md:flex-row md:items-center md:justify-between md:py-6"
+              : "flex flex-col gap-2.5 py-3 sm:gap-3 sm:py-4 md:flex-row md:items-center md:justify-between md:py-5"
           )}
         >
           <Link href="/" className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <div
               className={clsx(
                 "flex items-center justify-center rounded-2xl border border-cyan-300/30 bg-cyan-300/10 font-display font-semibold text-cyan-50",
-                isPlayRoute ? "h-9 w-9 text-sm sm:h-10 sm:w-10 sm:text-base" : "h-11 w-11 text-lg"
+                isPlayRoute ? "h-9 w-9 text-sm sm:h-10 sm:w-10 sm:text-base" : "h-10 w-10 text-base sm:h-11 sm:w-11 sm:text-lg"
               )}
             >
               MR
@@ -100,7 +100,7 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
                 </span>
                 {players !== undefined ? `${players} ${players > 1 ? "joueurs connectés" : "joueur connecté"}` : "Arène de mots en direct"}
               </p>
-              <p className={clsx("truncate font-display font-semibold text-white", isPlayRoute ? "text-[1.05rem] leading-tight sm:text-lg" : "text-lg")}>
+              <p className={clsx("truncate font-display font-semibold text-white", isPlayRoute ? "text-[1.05rem] leading-tight sm:text-lg" : "text-base leading-tight sm:text-lg")}>
                 Motus Royale
               </p>
             </div>
@@ -110,7 +110,7 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
             className={clsx(
               isPlayRoute
                 ? "col-start-2 flex w-auto flex-nowrap items-center justify-end gap-1.5 overflow-x-auto pb-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
-                : "grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:grid-cols-none md:justify-end"
+                : "flex w-full flex-nowrap items-center gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] md:w-auto md:flex-wrap md:justify-end md:overflow-visible md:pb-0"
             )}
           >
             {navLinks.map((link) => (
@@ -122,11 +122,9 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
                   pathname === link.href && link.tone === "secondary" && "border-cyan-300/30 bg-cyan-300/12 text-cyan-50",
                   isPlayRoute
                     ? "min-h-9 shrink-0 whitespace-nowrap px-3 py-1.5 text-[13px] sm:min-h-10 sm:px-4 sm:py-2 sm:text-sm"
-                    : "",
+                    : "min-h-10 shrink-0 whitespace-nowrap px-3 py-2 text-sm md:min-h-11 md:px-4",
                   isPlayRoute && link.href === "/admin" && "hidden xl:inline-flex",
-                  !isPlayRoute
-                    ? "w-full whitespace-nowrap md:w-auto"
-                    : ""
+                  !isPlayRoute ? "md:w-auto" : ""
                 )}
               >
                 {link.label}
@@ -136,7 +134,7 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto overflow-x-clip flex flex-col">{props.children}</main>
+      <main className={clsx("flex flex-1 flex-col overflow-x-clip", isPlayRoute && "min-h-0 overflow-y-auto")}>{props.children}</main>
     </>
   );
 }

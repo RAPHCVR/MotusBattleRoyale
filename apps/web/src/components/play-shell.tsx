@@ -4,7 +4,7 @@ import { type FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState,
 import clsx from "clsx";
 import { Client, type Room } from "colyseus.js";
 
-import { FeedbackToneIcon, GlassPanel, MetricBadge, SectionHeader, WordTile, type WordTileTone } from "@motus/ui";
+import { FeedbackToneIcon, GlassPanel, MetricBadge, SectionHeader, WordTile } from "@motus/ui";
 import type { BoardSnapshot, GuessResult, MatchSummary, RoomSnapshot, SeatReservation, TicketBundle } from "@motus/protocol";
 
 import { authClient } from "@/lib/auth-client";
@@ -293,6 +293,9 @@ export function PlayShell() {
   const phaseBadgeValue = getPhaseBadgeValue(roomPhase);
   const modeLabel = getModeLabel(roomSnapshot?.modifier);
   const fullscreenActive = isFullscreen || isPseudoFullscreen;
+  const shortTouchViewport = prefersTouchInput && viewportHeight > 0 && viewportHeight <= 760;
+  const compactTouchPreRoom = prefersTouchInput && !isInRoom && (fullscreenActive || shortTouchViewport);
+  const compactTouchRoomShell = prefersTouchInput && isInRoom && !isLiveRound && (fullscreenActive || (viewportHeight > 0 && viewportHeight <= 860));
   const showCompactReveal = showRoundReveal && (fullscreenActive || prefersTouchInput || (viewportHeight > 0 && viewportHeight <= 880));
   const showVirtualKeyboard = prefersTouchInput ? fullscreenActive && showTouchKeyboard : showDesktopKeyboard;
   const isSubmittingSession = pendingAction === "guest" || pendingAction === "upgrade" || pendingAction === "signin" || pendingAction === "passkeySignIn";
@@ -302,13 +305,18 @@ export function PlayShell() {
   const privateJoinPending = pendingAction === "privateJoin";
   const lockedSidebarToDesktop = isLiveRound && !prefersTouchInput;
   const compactTouchRound = isLiveRound && prefersTouchInput;
+  const compactTouchBoard = compactTouchRound || compactTouchRoomShell;
   const compactDesktopRound = isLiveRound && !prefersTouchInput && viewportHeight > 0 && viewportHeight <= 860;
   const desktopVisualKeyboardOpen = isLiveRound && !prefersTouchInput && showVirtualKeyboard;
   const compactDesktopKeyboard = desktopVisualKeyboardOpen && (fullscreenActive || compactDesktopRound || (viewportHeight > 0 && viewportHeight <= 920));
   const compactDockLayout = compactTouchRound || compactDesktopKeyboard;
+  const compactTouchKeyboardVisible = compactTouchRound && fullscreenActive && showTouchKeyboard;
+  const compactLobbySidebar = fullscreenActive && !prefersTouchInput && !isLiveRound;
   const denseDesktopBoard = isLiveRound && !prefersTouchInput && (compactDesktopRound || compactDesktopKeyboard);
   const compactLiveRound = compactTouchRound || compactDesktopRound || compactDesktopKeyboard;
   const canToggleFullscreen = isFullscreenSupported || prefersTouchInput;
+  const fullscreenScrollable = fullscreenActive && !isLiveRound;
+  const fullscreenButtonLabel = fullscreenActive ? (prefersTouchInput ? "Quitter" : "Quitter le plein écran") : "Plein écran";
   const roomCodeLabel = roomSnapshot?.roomCode ?? "Public";
   const matchInfoTitle =
     roomPhase === "results"
@@ -374,11 +382,19 @@ export function PlayShell() {
       : compactDesktopRound
         ? "max(17rem, min(20rem, calc(100dvh - 23rem)))"
         : "max(20rem, min(27rem, calc(100dvh - 24rem)))"
-    : "34rem";
+    : compactTouchRoomShell
+      ? shortTouchViewport
+        ? "min(100%, 17rem)"
+        : "min(100%, 19rem)"
+      : prefersTouchInput && isInRoom
+        ? "min(100%, 20rem)"
+        : "34rem";
   const liveDockMaxWidth = isLiveRound
     ? prefersTouchInput
       ? fullscreenActive
-        ? "min(100%, 22rem)"
+        ? compactTouchKeyboardVisible
+          ? "min(100%, 21rem)"
+          : "min(100%, 22rem)"
         : "min(100%, 19.5rem)"
       : compactDesktopKeyboard
         ? "min(100%, 24rem)"
@@ -386,7 +402,7 @@ export function PlayShell() {
         ? "max(18rem, min(24rem, calc(100dvh - 19rem)))"
         : "max(22rem, min(31rem, calc(100dvh - 21rem)))"
     : "34rem";
-  const virtualKeyboardMaxWidth = compactTouchRound ? "min(100%, 20rem)" : compactDesktopKeyboard ? "min(100%, 24rem)" : "34rem";
+  const virtualKeyboardMaxWidth = compactTouchKeyboardVisible ? "min(100%, 19rem)" : compactTouchRound ? "min(100%, 20rem)" : compactDesktopKeyboard ? "min(100%, 24rem)" : "34rem";
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 250);
@@ -869,40 +885,19 @@ export function PlayShell() {
 
   function getKeyboardButtonClass(tone: KeyboardLetterState): string {
     return clsx(
-      compactTouchRound
-        ? "relative flex h-9 w-full items-center justify-center overflow-hidden rounded-lg border px-0.5 text-[0.95rem] transition"
+      compactTouchKeyboardVisible
+        ? "relative flex h-8 w-full items-center justify-center overflow-hidden rounded-lg border px-0.5 text-[0.9rem] transition"
+        : compactTouchRound
+          ? "relative flex h-9 w-full items-center justify-center overflow-hidden rounded-lg border px-0.5 text-[0.95rem] transition"
         : compactDesktopKeyboard
           ? "relative flex h-9 w-full items-center justify-center overflow-hidden rounded-lg border px-0.5 text-[0.92rem] transition sm:h-10 sm:text-[1rem]"
-        : "relative flex h-11 w-full items-center justify-center overflow-hidden rounded-xl border px-1 text-base sm:h-12 sm:rounded-2xl sm:px-2 sm:text-lg transition",
+          : "relative flex h-11 w-full items-center justify-center overflow-hidden rounded-xl border px-1 text-base sm:h-12 sm:rounded-2xl sm:px-2 sm:text-lg transition",
       tone === "correct" && "border-lime-200/85 bg-lime-300 text-slate-950 shadow-[0_12px_22px_rgba(178,255,82,0.16)]",
       tone === "present" && "border-amber-200/85 bg-amber-300 text-slate-950 shadow-[0_10px_18px_rgba(255,190,85,0.14)]",
       tone === "hint" && "border-cyan-200/70 bg-cyan-300 text-slate-950",
       tone === "absent" && "cursor-not-allowed border-slate-700/90 bg-slate-800 text-slate-300",
       tone === "unused" &&
         "border-white/10 bg-white/[0.04] text-white hover:border-cyan-300/40 hover:bg-cyan-300/10 focus-visible:border-cyan-300/45"
-    );
-  }
-
-  function renderKeyboardToneDecor(tone: KeyboardLetterState) {
-    if (tone === "unused") {
-      return null;
-    }
-
-    const iconTone = tone === "hint" || tone === "correct" || tone === "present" || tone === "absent" ? tone : null;
-
-    return (
-      <span
-        className={clsx(
-          "pointer-events-none absolute z-10 flex items-center justify-center rounded-full border",
-          compactDesktopKeyboard ? "right-1 top-1 h-4 w-4" : "right-1.5 top-1.5 h-4.5 w-4.5",
-          iconTone === "correct" && "border-slate-950/12 bg-slate-950/10 text-slate-950",
-          iconTone === "present" && "border-slate-950/12 bg-slate-950/10 text-slate-950",
-          iconTone === "absent" && "border-white/10 bg-slate-950/45 text-slate-200",
-          iconTone === "hint" && "border-cyan-950/12 bg-slate-950/12 text-slate-950"
-        )}
-      >
-        <FeedbackToneIcon tone={iconTone as Exclude<WordTileTone, "idle" | "pending">} className={compactDesktopKeyboard ? "h-2.25 w-2.25" : "h-2.5 w-2.5"} />
-      </span>
     );
   }
 
@@ -986,25 +981,40 @@ export function PlayShell() {
       className={clsx(
         "flex min-h-0 flex-1 flex-col",
         isLiveRound && "h-full overflow-hidden",
-        fullscreenActive && "fixed inset-0 z-[80] h-[100dvh] w-screen bg-[#040811]"
+        fullscreenActive && "fixed inset-0 z-[80] h-[100dvh] w-screen bg-[#040811]",
+        fullscreenScrollable && "overflow-y-auto"
       )}
     >
       <GlassPanel
         className={clsx(
           "flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-5 md:p-6",
           compactTouchRound && "p-2.5",
+          compactTouchRoomShell && "p-3 sm:p-4",
           fullscreenActive &&
-            "rounded-none border-0 bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(3,7,16,1))] px-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-[calc(env(safe-area-inset-top)+0.5rem)] shadow-none sm:p-4"
+            "rounded-none border-0 bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(3,7,16,1))] px-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-[calc(env(safe-area-inset-top)+0.5rem)] shadow-none sm:p-4",
+          fullscreenScrollable && "flex-none min-h-full overflow-visible",
+          compactTouchPreRoom && "pb-[calc(env(safe-area-inset-bottom)+1rem)]"
         )}
       >
         <div
           className={clsx(
-            "flex-1 grid min-h-0 items-stretch gap-6 lg:gap-8",
+            "flex-1 grid min-h-0 gap-6 lg:gap-8",
             compactTouchRound && "gap-2.5",
+            compactTouchPreRoom && "gap-4",
+            compactTouchRound && fullscreenActive && "grid-rows-[minmax(0,1fr)]",
+            fullscreenScrollable ? "content-start items-start" : "items-stretch",
             isInRoom ? "grid-cols-1" : "lg:grid-cols-[1.15fr_0.85fr]"
           )}
         >
-          <div className={clsx("min-w-0 flex min-h-0 flex-col gap-6", compactTouchRound && "gap-2.5", isLiveRound && "overflow-hidden")}>
+          <div
+            className={clsx(
+              "min-w-0 flex min-h-0 flex-col gap-6",
+              compactTouchRound && "gap-2.5",
+              compactTouchPreRoom && "gap-4",
+              fullscreenScrollable && "min-h-fit",
+              isLiveRound && "overflow-hidden"
+            )}
+          >
             {!isInRoom ? (
               <SectionHeader
                 eyebrow="Jouer"
@@ -1012,8 +1022,13 @@ export function PlayShell() {
                 body="Tout se passe au même endroit: session, entrée en partie et manche en direct. Tu peux commencer en invité puis créer un compte sans perdre ton profil."
                 action={
                   canToggleFullscreen ? (
-                    <button className="button-secondary" type="button" onClick={() => void toggleFullscreen()} aria-pressed={fullscreenActive}>
-                      {fullscreenActive ? "Quitter le plein écran" : "Plein écran"}
+                    <button
+                      className={clsx("button-secondary", compactTouchPreRoom && "min-h-9 px-3 py-1.5 text-sm")}
+                      type="button"
+                      onClick={() => void toggleFullscreen()}
+                      aria-pressed={fullscreenActive}
+                    >
+                      {fullscreenButtonLabel}
                     </button>
                   ) : undefined
                 }
@@ -1078,9 +1093,9 @@ export function PlayShell() {
                 </div>
               </div>
             ) : !roomSnapshot ? (
-              <div className="grid gap-5 xl:grid-cols-[1fr_0.92fr]">
-                <div className="min-w-0 space-y-5">
-                  <div className="grid gap-4 sm:grid-cols-2">
+              <div className={clsx("grid gap-5 xl:grid-cols-[1fr_0.92fr]", compactTouchPreRoom && "gap-4")}>
+                <div className={clsx("min-w-0 space-y-5", compactTouchPreRoom && "space-y-4")}>
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <button
                       className="button-primary relative z-10 w-full"
                       type="button"
@@ -1109,13 +1124,13 @@ export function PlayShell() {
                     </button>
                   </div>
 
-                  <p className="text-sm leading-6 text-slate-400" aria-live="polite">
+                  <p className={clsx("text-sm leading-6 text-slate-400", compactTouchPreRoom && "leading-5")} aria-live="polite">
                     {isConnectingToRoom ? "Connexion en cours. L’écran basculera dès que le salon répond." : "Public pour aller vite, privé pour inviter par code."}
                   </p>
 
-                  <div className="rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
+                  <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4 sm:rounded-[26px] sm:p-5">
                     <p className="eyebrow">Rejoindre avec un code</p>
-                    <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                    <div className="mt-3.5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                       <input
                         className="input-shell"
                         placeholder="AB12CD"
@@ -1142,17 +1157,19 @@ export function PlayShell() {
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="eyebrow">Compte</p>
-                      <h3 className="mt-2 break-words font-display text-2xl text-white sm:text-3xl">{sessionUser.name}</h3>
-                      <p className="mt-2 break-all text-sm text-slate-300">{sessionUser.email}</p>
-                    </div>
+                <div className="min-w-0 rounded-[24px] border border-white/8 bg-white/[0.03] p-4 sm:rounded-[26px] sm:p-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="eyebrow">Compte</p>
+                        <h3 className="mt-2 truncate font-display text-2xl text-white sm:text-3xl" title={sessionUser.name}>
+                          {sessionUser.name}
+                        </h3>
+                        <p className="mt-2 break-all text-sm text-slate-300">{sessionUser.email}</p>
+                      </div>
                     <MetricBadge label="Type" value={sessionUser.isAnonymous ? "Invité" : "Compte"} />
                   </div>
 
-                  <div className="mt-5 grid grid-cols-2 gap-2">
+                  <div className="mt-4 grid grid-cols-2 gap-2">
                     <button className="button-secondary flex-1" type="button" onClick={() => setAuthMode("upgrade")}>
                       Créer un compte
                     </button>
@@ -1229,27 +1246,33 @@ export function PlayShell() {
             ) : (
               <div
                 className={clsx(
-                  "grid min-h-0 gap-5",
+                  "grid min-h-0 flex-1 gap-5",
                   lockedSidebarToDesktop
                     ? "xl:grid-cols-[minmax(0,1fr)_18.5rem] 2xl:grid-cols-[minmax(0,1fr)_20rem]"
                     : "xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]"
                 )}
               >
-                <div className={clsx("min-w-0", isLiveRound ? `flex min-h-0 flex-col overflow-hidden ${compactLiveRound ? "gap-3" : "gap-4"}` : "space-y-5")}>
-                  <div className={clsx("flex flex-wrap gap-2", compactTouchRound && "gap-1", compactDesktopRound && "gap-1.5")}>
-                    {!compactLiveRound ? <MetricBadge label="Phase" value={phaseBadgeValue} /> : null}
-                    <MetricBadge label="Temps" value={timeValue} tone={roomPhase === "round" ? "danger" : "default"} />
-                    {!compactLiveRound ? <MetricBadge label="Salon" value={roomSnapshot.roomCode ?? "Public"} /> : null}
-                    {!compactLiveRound ? <MetricBadge label="Mode" value={modeLabel} tone="good" /> : null}
-                    {isLiveRound ? <MetricBadge label="Score" value={localPlayer?.score ?? 0} /> : null}
-                    {isLiveRound && liveBoardSnapshot ? <MetricBadge label="Essais" value={liveBoardSnapshot.attemptsRemaining} tone="good" /> : null}
+                <div
+                  className={clsx(
+                    "min-w-0",
+                    isLiveRound ? `flex min-h-0 flex-col overflow-hidden ${compactLiveRound ? "gap-3" : "gap-4"}` : compactTouchRoomShell ? "space-y-4" : "space-y-5",
+                    compactTouchRound && fullscreenActive && "h-full"
+                  )}
+                >
+                  <div className={clsx("flex flex-wrap gap-2", compactTouchRound && "gap-1", compactDesktopRound && "gap-1.5", compactTouchRoomShell && "gap-1.5")}>
+                    {!compactLiveRound ? <MetricBadge label="Phase" value={phaseBadgeValue} compact={compactTouchRoomShell} /> : null}
+                    <MetricBadge label="Temps" value={timeValue} tone={roomPhase === "round" ? "danger" : "default"} compact={compactTouchRoomShell || compactLiveRound} />
+                    {!compactLiveRound && !compactTouchRoomShell ? <MetricBadge label="Salon" value={roomSnapshot.roomCode ?? "Public"} /> : null}
+                    {!compactLiveRound && !compactTouchRoomShell ? <MetricBadge label="Mode" value={modeLabel} tone="good" /> : null}
+                    {isLiveRound ? <MetricBadge label="Score" value={localPlayer?.score ?? 0} compact={compactLiveRound} /> : null}
+                    {isLiveRound && liveBoardSnapshot ? <MetricBadge label="Essais" value={liveBoardSnapshot.attemptsRemaining} tone="good" compact={compactLiveRound} /> : null}
                     {canToggleFullscreen ? (
                       <button
-                        className={clsx("button-secondary min-h-10 px-3 py-2 text-sm", compactLiveRound && "min-h-9 px-2.5 py-1.5 text-xs")}
+                        className={clsx("button-secondary min-h-10 px-3 py-2 text-sm", (compactLiveRound || compactTouchRoomShell) && "min-h-9 px-2.5 py-1.5 text-xs")}
                         type="button"
                         onClick={() => void toggleFullscreen()}
                       >
-                        {fullscreenActive ? "Quitter le plein écran" : "Plein écran"}
+                        {fullscreenButtonLabel}
                       </button>
                     ) : null}
                     {isLiveRound && !prefersTouchInput ? (
@@ -1264,17 +1287,19 @@ export function PlayShell() {
                     ) : null}
                   </div>
 
-                    <div
-                      className={clsx(
+                  <div
+                    className={clsx(
                       "min-h-0 rounded-[30px] border border-white/8 bg-slate-950/72",
-                      compactTouchRound ? "relative p-2.5" : compactLiveRound ? "p-3" : "p-4 sm:p-5",
-                      isLiveRound && "flex h-full flex-col overflow-hidden"
+                      compactTouchRound ? "relative p-2.5" : compactTouchRoomShell ? "p-3" : compactLiveRound ? "p-3" : "p-4 sm:p-5",
+                      isLiveRound && "flex h-full flex-col overflow-hidden",
+                      compactTouchRound && fullscreenActive && "flex-1"
                     )}
                   >
                     <div
                       className={clsx(
                         "flex flex-col gap-3",
                         compactTouchRound && "mb-2 gap-1.5",
+                        compactTouchRoomShell && "mb-3 gap-2",
                         !isLiveRound && "mb-5 sm:flex-row sm:items-start sm:justify-between",
                         isLiveRound && !compactLiveRound && "mb-3 sm:flex-row sm:items-start sm:justify-between",
                         compactDesktopRound && "mb-2"
@@ -1286,6 +1311,7 @@ export function PlayShell() {
                           className={clsx(
                             "font-display text-white",
                             compactTouchRound ? "text-[1.15rem]" : "mt-2 text-3xl sm:text-4xl",
+                            compactTouchRoomShell && "mt-1 text-[1.35rem] sm:text-[1.55rem]",
                             compactDesktopRound && "mt-0 text-[2rem]",
                             isLiveRound && !compactLiveRound && "text-2xl sm:text-3xl"
                           )}
@@ -1295,6 +1321,7 @@ export function PlayShell() {
                         {!compactLiveRound ? (
                           <p className={clsx("mt-2 max-w-2xl text-sm leading-6 text-slate-300", isLiveRound && "sm:max-w-xl")}>{roundSubtitle}</p>
                         ) : null}
+                        {compactTouchRoomShell ? <p className="mt-2 text-xs text-slate-400">{`${roomCodeLabel} • ${modeLabel}`}</p> : null}
                         {showInlineStatusMessage ? (
                           <p className={clsx("mt-3 text-sm text-slate-400 md:hidden", compactTouchRound && "hidden")} aria-live="polite">
                             {statusMessage}
@@ -1303,13 +1330,13 @@ export function PlayShell() {
                       </div>
 
                       {!isLiveRound ? (
-                        <div className="grid gap-2 sm:min-w-40">
-                          <div className="rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-3 text-right">
+                        <div className={clsx("grid gap-2 sm:min-w-40", compactTouchRoomShell && "grid-cols-2 sm:min-w-0")}>
+                          <div className={clsx("rounded-[22px] border border-white/10 bg-white/[0.04] text-right", compactTouchRoomShell ? "px-3 py-2.5" : "px-4 py-3")}>
                             <p className="eyebrow">Score</p>
-                            <p className="number-tabular text-3xl font-semibold text-white">{localPlayer?.score ?? 0}</p>
+                            <p className={clsx("number-tabular font-semibold text-white", compactTouchRoomShell ? "text-2xl" : "text-3xl")}>{localPlayer?.score ?? 0}</p>
                           </div>
                           {liveBoardSnapshot ? (
-                            <div className="rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-3 text-right">
+                            <div className={clsx("rounded-[20px] border border-white/10 bg-white/[0.04] text-right", compactTouchRoomShell ? "px-3 py-2.5" : "px-4 py-3")}>
                               <p className="eyebrow">Essais restants</p>
                               <p className="number-tabular text-2xl font-semibold text-white">{liveBoardSnapshot.attemptsRemaining}</p>
                             </div>
@@ -1365,8 +1392,7 @@ export function PlayShell() {
                     <div
                       className={clsx(
                         isLiveRound && "min-h-0 flex-1",
-                        compactTouchRound && "flex items-start justify-center pt-1 pb-[7.5rem]",
-                        compactTouchRound && showVirtualKeyboard && "pb-[16.75rem]"
+                        compactTouchRound && "flex items-start justify-center pt-1 pb-2"
                       )}
                     >
                       {boardIsStale ? (
@@ -1378,13 +1404,13 @@ export function PlayShell() {
                       ) : liveBoardSnapshot ? (
                         <div
                           data-play-grid
-                          className={clsx("mx-auto w-full", compactTouchRound ? "space-y-1" : denseDesktopBoard ? "space-y-1.5 sm:space-y-2" : "space-y-2 sm:space-y-3")}
+                          className={clsx("mx-auto w-full", compactTouchBoard ? "space-y-1" : denseDesktopBoard ? "space-y-1.5 sm:space-y-2" : "space-y-2 sm:space-y-3")}
                           style={{ maxWidth: liveBoardMaxWidth }}
                         >
                           {displayRows.map((row, rowIndex) => (
                             <div
                               key={rowIndex}
-                              className={clsx("grid", compactTouchRound ? "gap-1" : denseDesktopBoard ? "gap-1.5 sm:gap-2" : "gap-2 sm:gap-3")}
+                              className={clsx("grid", compactTouchBoard ? "gap-1" : denseDesktopBoard ? "gap-1.5 sm:gap-2" : "gap-2 sm:gap-3")}
                               style={{ gridTemplateColumns: `repeat(${liveBoardSnapshot.wordLength}, minmax(0, 1fr))` }}
                             >
                               {row.map((cell, columnIndex) => (
@@ -1393,7 +1419,7 @@ export function PlayShell() {
                                   letter={cell.letter}
                                   state={cell.state}
                                   hint={cell.hint}
-                                  compact={compactTouchRound}
+                                  compact={compactTouchBoard}
                                   dense={denseDesktopBoard}
                                 />
                               ))}
@@ -1413,7 +1439,7 @@ export function PlayShell() {
                         className={clsx(
                           "z-30 mx-auto w-full",
                           compactTouchRound
-                            ? "pointer-events-none absolute inset-x-2 bottom-2"
+                            ? "mt-auto shrink-0 pt-2"
                             : prefersTouchInput
                               ? "sticky bottom-0 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
                               : "mt-auto pt-2"
@@ -1425,7 +1451,9 @@ export function PlayShell() {
                             "overflow-hidden rounded-[24px] border",
                             prefersTouchInput
                               ? compactTouchRound
-                                ? "pointer-events-auto border-white/10 bg-slate-950/96 p-2.5 shadow-[0_-10px_44px_rgba(0,0,0,0.5)] backdrop-blur"
+                                ? compactTouchKeyboardVisible
+                                  ? "border-white/10 bg-slate-950/96 p-2 shadow-[0_-10px_40px_rgba(0,0,0,0.46)] backdrop-blur"
+                                  : "border-white/10 bg-slate-950/96 p-2.5 shadow-[0_-10px_44px_rgba(0,0,0,0.5)] backdrop-blur"
                                 : "border-white/10 bg-slate-950/96 p-3 shadow-[0_-10px_44px_rgba(0,0,0,0.5)] backdrop-blur"
                               : compactDesktopKeyboard
                                 ? "border-white/8 bg-white/[0.03] p-2 shadow-[0_18px_40px_rgba(0,0,0,0.22)]"
@@ -1464,7 +1492,6 @@ export function PlayShell() {
                                     item.tone === "absent" && "border-slate-400/25 bg-slate-400/10 text-slate-200"
                                   )}
                                 >
-                                  <FeedbackToneIcon tone={item.tone} className="h-3 w-3" />
                                   {item.title}
                                 </span>
                               ))}
@@ -1479,7 +1506,7 @@ export function PlayShell() {
                             >
                               <input
                                 ref={guessInputRef}
-                                className={clsx("input-shell", compactDockLayout && "px-3 py-2.5 text-sm")}
+                                className={clsx("input-shell", compactDockLayout && "px-3 py-2.5 text-sm", compactTouchKeyboardVisible && "py-2 text-sm")}
                                 value={guess}
                                 onFocus={() => {
                                   setIsInputFocused(true);
@@ -1518,18 +1545,18 @@ export function PlayShell() {
                               />
                               <div className={clsx("grid grid-cols-3 gap-2", compactDockLayout && "gap-1.5")}>
                                 <button
-                                  className={clsx("button-secondary w-full", compactDockLayout && "min-h-9 px-2 py-1.5 text-sm")}
+                                  className={clsx("button-secondary w-full", compactDockLayout && "min-h-9 px-2 py-1.5 text-sm", compactTouchKeyboardVisible && "min-h-8 px-2 py-1 text-[0.82rem]")}
                                   type="button"
                                   onClick={() => roomRef.current?.send("use_clue")}
                                   disabled={!(liveBoardSnapshot?.canUseClue ?? false)}
                                 >
                                   Indice
                                 </button>
-                                <button className={clsx("button-primary w-full", compactDockLayout && "min-h-9 px-2 py-1.5 text-sm")} type="submit">
+                                <button className={clsx("button-primary w-full", compactDockLayout && "min-h-9 px-2 py-1.5 text-sm", compactTouchKeyboardVisible && "min-h-8 px-2 py-1 text-[0.82rem]")} type="submit">
                                   Valider
                                 </button>
                                 <button
-                                  className={clsx("button-secondary w-full", compactDockLayout && "min-h-9 px-2 py-1.5 text-sm")}
+                                  className={clsx("button-secondary w-full", compactDockLayout && "min-h-9 px-2 py-1.5 text-sm", compactTouchKeyboardVisible && "min-h-8 px-2 py-1 text-[0.82rem]")}
                                   type="button"
                                   onClick={removeLetter}
                                 >
@@ -1542,6 +1569,7 @@ export function PlayShell() {
                               <button
                                 className={clsx(
                                   "self-start rounded-full border px-3 py-1 text-[11px] text-slate-100 transition",
+                                  compactTouchKeyboardVisible && "px-2.5 py-0.75 text-[10px]",
                                   showTouchKeyboard ? "border-cyan-300/35 bg-cyan-300/12 text-cyan-50" : "border-white/10 bg-white/[0.04]"
                                 )}
                                 type="button"
@@ -1564,14 +1592,18 @@ export function PlayShell() {
                             {showVirtualKeyboard ? (
                               <div
                                 className={clsx(
-                                  compactTouchRound || compactDesktopKeyboard ? "space-y-1 overflow-hidden" : "space-y-1.5 overflow-hidden sm:space-y-2",
+                                  compactTouchKeyboardVisible
+                                    ? "space-y-0.75 overflow-hidden"
+                                    : compactTouchRound || compactDesktopKeyboard
+                                      ? "space-y-1 overflow-hidden"
+                                      : "space-y-1.5 overflow-hidden sm:space-y-2",
                                   isInputFocused && prefersTouchInput && "hidden"
                                 )}
                               >
                                 {keyboardRows.map((row) => (
                                   <div
                                     key={row}
-                                    className={clsx("mx-auto grid", compactTouchRound || compactDesktopKeyboard ? "gap-1" : "gap-1.5 sm:gap-2")}
+                                    className={clsx("mx-auto grid", compactTouchKeyboardVisible ? "gap-0.75" : compactTouchRound || compactDesktopKeyboard ? "gap-1" : "gap-1.5 sm:gap-2")}
                                     style={{
                                       gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
                                       maxWidth: virtualKeyboardMaxWidth
@@ -1589,7 +1621,6 @@ export function PlayShell() {
                                           type="button"
                                           onClick={() => appendLetter(letter)}
                                         >
-                                          {renderKeyboardToneDecor(tone)}
                                           <span className="relative z-10">{letter}</span>
                                         </button>
                                       );
@@ -1626,12 +1657,18 @@ export function PlayShell() {
                   className={clsx(
                     "grid min-w-0 gap-5",
                     compactTouchRound && "hidden",
-                    lockedSidebarToDesktop ? "hidden xl:grid xl:self-start xl:sticky xl:top-4 xl:grid-cols-1 xl:gap-4" : "lg:grid-cols-2 xl:sticky xl:top-6 xl:grid-cols-1"
+                    lockedSidebarToDesktop
+                      ? "hidden xl:grid xl:self-start xl:sticky xl:top-4 xl:grid-cols-1 xl:gap-4"
+                      : compactLobbySidebar
+                        ? "lg:grid-cols-2 xl:grid-cols-1 xl:self-start xl:max-h-[calc(100dvh-5.5rem)] xl:overflow-y-auto xl:gap-4 xl:pr-1"
+                        : "lg:grid-cols-2 xl:sticky xl:top-6 xl:grid-cols-1"
                   )}
                 >
-                  <div className={clsx("hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block", isLiveRound && "xl:hidden")}>
+                  <div className={clsx("hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block", (isLiveRound || compactLobbySidebar) && "xl:hidden")}>
                     <p className="eyebrow">Session</p>
-                    <h3 className="mt-3 break-words font-display text-2xl text-white sm:text-3xl">{sessionUser?.name}</h3>
+                    <h3 className="mt-3 truncate font-display text-2xl text-white sm:text-3xl" title={sessionUser?.name ?? undefined}>
+                      {sessionUser?.name}
+                    </h3>
                     <p className="mt-2 break-all text-sm text-slate-300">{sessionUser?.email}</p>
                     <div className="mt-5 flex flex-wrap gap-2 sm:gap-3">
                       <MetricBadge label="Type" value={sessionUser?.isAnonymous ? "Invité" : "Compte"} />
@@ -1639,7 +1676,7 @@ export function PlayShell() {
                     </div>
                   </div>
 
-                  <div className={clsx("hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block", isLiveRound && "xl:hidden")}>
+                  <div className={clsx("hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block", (isLiveRound || compactLobbySidebar) && "xl:hidden")}>
                     <p className="eyebrow">Repères</p>
                     <div className="mt-4 space-y-3">
                       {feedbackLegend.map((item) => (
@@ -1662,45 +1699,52 @@ export function PlayShell() {
                   <div
                     className={clsx(
                       "rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5",
-                      lockedSidebarToDesktop && "flex max-h-[calc(100dvh-15rem)] flex-col overflow-hidden"
+                      (lockedSidebarToDesktop || compactLobbySidebar) && "flex flex-col overflow-hidden",
+                      lockedSidebarToDesktop && "max-h-[calc(100dvh-15rem)]",
+                      compactLobbySidebar && "xl:max-h-[calc(100dvh-9rem)]"
                     )}
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="eyebrow">Classement</p>
-                        <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">{lockedSidebarToDesktop ? "Positions" : "Classement live"}</h3>
+                        <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">
+                          {compactLobbySidebar ? "Joueurs" : lockedSidebarToDesktop ? "Positions" : "Classement live"}
+                        </h3>
                       </div>
-                      <MetricBadge label="Joueurs" value={deferredSnapshot?.players.length ?? roomSnapshot.players.length} />
+                      <MetricBadge label="Joueurs" value={deferredSnapshot?.players.length ?? roomSnapshot.players.length} compact={compactLobbySidebar} />
                     </div>
 
-                    <div className={clsx("mt-5 space-y-3", lockedSidebarToDesktop && "flex-1 overflow-y-auto pr-1")}>
+                    <div className={clsx("mt-5 space-y-3", (lockedSidebarToDesktop || compactLobbySidebar) && "flex-1 overflow-y-auto pr-1")}>
                       {(deferredSnapshot?.players ?? roomSnapshot.players).map((player, index) => (
                         <div
                           key={player.userId}
                           className={clsx(
                             "rounded-[22px] border px-4 py-3 transition",
                             lockedSidebarToDesktop && "px-3 py-2.5",
+                            compactLobbySidebar && "px-3 py-2.5",
                             player.userId === sessionUser?.id ? "border-cyan-300/35 bg-cyan-300/10" : "border-white/8 bg-white/[0.03]"
                           )}
                         >
-                          <div className={clsx("flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between", lockedSidebarToDesktop && "gap-2")}>
-                            <div className="min-w-0 flex items-center gap-3">
+                          <div className={clsx("flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between", (lockedSidebarToDesktop || compactLobbySidebar) && "gap-2")}>
+                            <div className="min-w-0 flex flex-1 items-center gap-3">
                               <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-950/80 text-sm text-white">
                                 #{index + 1}
                               </span>
-                              <div className="min-w-0">
-                                <p className="break-words font-medium text-white">{player.name}</p>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium text-white" title={player.name}>
+                                  {player.name}
+                                </p>
                                 <p className="text-xs uppercase tracking-[0.24em] text-slate-400">{getPlayerStatusLabel(player.status)}</p>
                               </div>
                             </div>
-                            <span className="number-tabular text-sm text-slate-200">{player.score} pts</span>
+                            <span className="number-tabular shrink-0 text-sm text-slate-200">{player.score} pts</span>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className={clsx("rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5", isLiveRound && "hidden")}>
+                  <div className={clsx("rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5", isLiveRound && "hidden", compactLobbySidebar && "xl:p-4")}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="eyebrow">État du match</p>
@@ -1780,7 +1824,7 @@ export function PlayShell() {
             <div className="min-w-0 space-y-5">
               <div className="rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
                 <p className="eyebrow">Session</p>
-                <h3 className="mt-3 break-words font-display text-2xl text-white sm:text-3xl">
+                <h3 className="mt-3 truncate font-display text-2xl text-white sm:text-3xl" title={sessionUser?.name ?? undefined}>
                   {sessionUser?.name ?? "Aucune session"}
                 </h3>
                 <p className="mt-2 break-all text-sm text-slate-300">{sessionUser?.email ?? "Passe par invité ou email."}</p>

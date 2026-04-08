@@ -1,0 +1,316 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: motus
+  labels:
+    app.kubernetes.io/part-of: motus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: motus-web-config
+  namespace: motus
+  labels:
+    app.kubernetes.io/name: motus-web
+    app.kubernetes.io/part-of: motus
+data:
+  NODE_ENV: production
+  NEXT_PUBLIC_APP_URL: https://motus.raphcvr.me
+  AUTH_BASE_URL: https://motus.raphcvr.me/api/auth
+  GAME_SERVER_INTERNAL_URL: http://motus-game:2567
+  NEXT_PUBLIC_GAME_WS_URL: wss://motus.raphcvr.me/realtime
+  PASSKEY_RP_ID: motus.raphcvr.me
+  PASSKEY_ORIGIN: https://motus.raphcvr.me
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: motus-game-config
+  namespace: motus
+  labels:
+    app.kubernetes.io/name: motus-game
+    app.kubernetes.io/part-of: motus
+data:
+  NODE_ENV: production
+  PORT: "2567"
+  CORS_ORIGIN: https://motus.raphcvr.me
+  AUTH_VERIFY_URL: http://motus-web:3000/api/auth/one-time-token/verify
+  GAME_PUBLIC_WS_URL: wss://motus.raphcvr.me/realtime
+  GAME_PUBLIC_HTTP_URL: https://motus.raphcvr.me/realtime
+  LOG_LEVEL: info
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: motus-game
+  namespace: motus
+  annotations:
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+    keel.sh/pollSchedule: '@every 1m'
+  labels:
+    app.kubernetes.io/name: motus-game
+    app.kubernetes.io/component: game
+    app.kubernetes.io/part-of: motus
+spec:
+  minReadySeconds: 5
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: motus-game
+      app.kubernetes.io/part-of: motus
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: motus-game
+        app.kubernetes.io/component: game
+        app.kubernetes.io/part-of: motus
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: ghcr-secret
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: game
+          image: ghcr.io/raphcvr/motusbattleroyale-game:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: motus-game-config
+            - secretRef:
+                name: motus-db-secret
+            - secretRef:
+                name: motus-app-secret
+          ports:
+            - name: http
+              containerPort: 2567
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 24
+            periodSeconds: 5
+            timeoutSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 2
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - sleep 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: motus-game
+  namespace: motus
+  labels:
+    app.kubernetes.io/name: motus-game
+    app.kubernetes.io/part-of: motus
+spec:
+  selector:
+    app.kubernetes.io/name: motus-game
+    app.kubernetes.io/part-of: motus
+  ports:
+    - name: http
+      port: 2567
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: motus-web
+  namespace: motus
+  annotations:
+    keel.sh/policy: "glob:sha-*"
+    keel.sh/trigger: poll
+    keel.sh/pollSchedule: '@every 1m'
+  labels:
+    app.kubernetes.io/name: motus-web
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: motus
+spec:
+  minReadySeconds: 5
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: motus-web
+      app.kubernetes.io/part-of: motus
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: motus-web
+        app.kubernetes.io/component: web
+        app.kubernetes.io/part-of: motus
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: ghcr-secret
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: ghcr.io/raphcvr/motusbattleroyale-web:sha-792b337
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: motus-web-config
+            - secretRef:
+                name: motus-db-secret
+            - secretRef:
+                name: motus-app-secret
+          ports:
+            - name: http
+              containerPort: 3000
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+            timeoutSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 1
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: motus-web
+  namespace: motus
+  labels:
+    app.kubernetes.io/name: motus-web
+    app.kubernetes.io/part-of: motus
+spec:
+  selector:
+    app.kubernetes.io/name: motus-web
+    app.kubernetes.io/part-of: motus
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: motus-web
+  namespace: motus
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: 2m
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: motus.raphcvr.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: motus-web
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: motus-game
+  namespace: motus
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: 2m
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/websocket-services: motus-game
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: motus.raphcvr.me
+      http:
+        paths:
+          - path: /realtime/?(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: motus-game
+                port:
+                  name: http

@@ -59,11 +59,11 @@ export default async function HomePage() {
   ];
 
   return (
-    <div className="page-shell space-y-10 py-8 md:py-16">
-      <section className="space-y-4">
-        <GlassPanel className="overflow-hidden p-5 sm:p-6 md:p-7">
-          <div className="grid gap-8 xl:grid-cols-[1.04fr_0.96fr] xl:gap-10">
-            <div className="min-w-0 space-y-6">
+    <div className="page-shell space-y-8 py-6 md:space-y-10 md:py-12">
+      <section className="space-y-3">
+        <GlassPanel className="overflow-hidden p-4 sm:p-6 md:p-7">
+          <div className="grid gap-6 xl:grid-cols-[1.04fr_0.96fr] xl:gap-8">
+            <div className="min-w-0 space-y-5">
               <div className="flex flex-wrap gap-2">
                 {heroSignals.map((signal) => (
                   <span key={signal.label} className={`signal-pill ${signal.tone}`}>
@@ -74,10 +74,10 @@ export default async function HomePage() {
 
               <div className="space-y-4">
                 <p className="eyebrow">Arène de mots</p>
-                <h1 className="max-w-[12ch] text-balance font-display text-4xl font-semibold tracking-tight text-white sm:text-5xl md:text-7xl">
+                <h1 className="max-w-[12ch] text-balance font-display text-3xl font-semibold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
                   Une arène de mots qui se comprend en un regard.
                 </h1>
-                <p className="max-w-2xl text-base leading-7 text-slate-300 md:text-lg">
+                <p className="max-w-2xl text-[0.98rem] leading-7 text-slate-300 md:text-lg">
                   Tu entres, tu comprends l’état de la manche, puis tu joues tout de suite. L’interface reste nette sur
                   desktop comme sur téléphone.
                 </p>
@@ -92,56 +92,56 @@ export default async function HomePage() {
                 </Link>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-2.5 sm:grid-cols-3">
                 <MetricBadge label="Format" value="7 manches / top 4" />
                 <MetricBadge label="Temps réel" value="Colyseus + WebSocket" tone="good" />
                 <MetricBadge label="Session" value="Invité ou compte" />
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-2.5 md:grid-cols-3">
                 {launchSteps.map(([step, title, body]) => (
                   <div key={step} className="signal-card">
                     <p className="eyebrow">{step}</p>
-                    <h3 className="mt-3 font-display text-xl text-white">{title}</h3>
-                    <p className="mt-3 text-sm leading-6 text-slate-300">{body}</p>
+                    <h3 className="mt-2.5 font-display text-lg text-white sm:text-xl">{title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">{body}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-              <div className="min-w-0">
-                <div className="arcade-screen">
-                  <div className="relative z-10 space-y-5">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="eyebrow">Aperçu de partie</p>
-                        <h2 className="mt-2 font-display text-3xl text-white sm:text-4xl">Lecture immédiate</h2>
-                        <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
-                          Le home reprend déjà la lecture de la partie: mêmes couleurs, mêmes surfaces, même hiérarchie.
-                        </p>
-                      </div>
-                      <MetricBadge label="Manche" value="00:41" tone="danger" />
+            <div className="min-w-0">
+              <div className="arcade-screen">
+                <div className="relative z-10 space-y-4 sm:space-y-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="eyebrow">Aperçu de partie</p>
+                      <h2 className="mt-2 font-display text-2xl text-white sm:text-3xl md:text-4xl">Lecture immédiate</h2>
+                      <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
+                        Le home reprend déjà la lecture de la partie: mêmes couleurs, mêmes surfaces, même hiérarchie.
+                      </p>
+                    </div>
+                    <MetricBadge label="Manche" value="00:41" tone="danger" compact />
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-2.5 sm:grid-cols-3">
                     {heroMetrics.map((metric) => (
                       <div key={metric.label} className="signal-card">
                         <p className="eyebrow">{metric.label}</p>
-                        <p className="number-tabular mt-3 font-display text-3xl text-white">{metric.value}</p>
+                        <p className="number-tabular mt-2.5 font-display text-2xl text-white sm:text-3xl">{metric.value}</p>
                       </div>
                     ))}
                   </div>
 
-                  <div className="rounded-[26px] border border-white/8 bg-slate-950/75 p-4">
+                  <div className="rounded-[24px] border border-white/8 bg-slate-950/75 p-3.5 sm:rounded-[26px] sm:p-4">
                     <div className="grid grid-cols-6 gap-2 sm:gap-3">
                       {heroWordPreview.map((tile, index) => (
                         <WordTile key={index} letter={tile.letter} state={tile.state} hint={tile.hint} />
                       ))}
                     </div>
 
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="flex items-center gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3">
-                        <div className="w-11 shrink-0">
+                    <div className="mt-3.5 grid gap-2.5 sm:grid-cols-2">
+                      <div className="flex items-center gap-2.5 rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3">
+                        <div className="w-10 shrink-0">
                           <WordTile letter="A" state="correct" />
                         </div>
                         <div>
@@ -150,8 +150,8 @@ export default async function HomePage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3">
-                        <div className="w-11 shrink-0">
+                      <div className="flex items-center gap-2.5 rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3">
+                        <div className="w-10 shrink-0">
                           <WordTile letter="A" state="present" />
                         </div>
                         <div>
@@ -160,8 +160,8 @@ export default async function HomePage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3">
-                        <div className="w-11 shrink-0">
+                      <div className="flex items-center gap-2.5 rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3">
+                        <div className="w-10 shrink-0">
                           <WordTile letter="A" hint />
                         </div>
                         <div>
@@ -170,8 +170,8 @@ export default async function HomePage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3">
-                        <div className="w-11 shrink-0">
+                      <div className="flex items-center gap-2.5 rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3">
+                        <div className="w-10 shrink-0">
                           <WordTile letter="A" state="absent" />
                         </div>
                         <div>
@@ -182,9 +182,9 @@ export default async function HomePage() {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {liveFeed.map((item, index) => (
-                      <div key={item.label} className="flex items-start justify-between gap-4 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                      <div key={item.label} className="flex items-start justify-between gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3.5 py-3">
                         <div className="min-w-0">
                           <p className="font-medium text-white">{item.label}</p>
                           <p className="mt-1 text-sm leading-6 text-slate-300">{item.body}</p>
@@ -202,26 +202,26 @@ export default async function HomePage() {
         </GlassPanel>
       </section>
 
-      <section className="space-y-6">
+      <section className="space-y-4 sm:space-y-6">
         <SectionHeader
           eyebrow="Lisibilité"
           title="Chaque écran doit se lire à vitesse de jeu"
           body="La lecture doit survivre au stress, au mobile et à la vision périphérique. Le site n’a pas le droit d’être joli mais ambigu."
         />
 
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           {pillars.map((pillar) => (
             <GlassPanel key={pillar.title} className="space-y-4">
               <p className="eyebrow">Pilier</p>
-              <h3 className="font-display text-2xl text-white">{pillar.title}</h3>
+              <h3 className="font-display text-xl text-white sm:text-2xl">{pillar.title}</h3>
               <p className="text-sm leading-6 text-slate-300">{pillar.body}</p>
             </GlassPanel>
           ))}
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <GlassPanel className="space-y-5">
+      <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+        <GlassPanel className="space-y-4 sm:space-y-5">
           <SectionHeader
             eyebrow="Déploiement"
             title="Même base du localhost à la prod"
@@ -244,7 +244,7 @@ export default async function HomePage() {
           </div>
         </GlassPanel>
 
-        <GlassPanel className="space-y-6">
+        <GlassPanel className="space-y-5">
           <SectionHeader
             eyebrow="Entrée en partie"
             title="Entrer sans friction"
@@ -256,12 +256,12 @@ export default async function HomePage() {
             }
           />
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-3">
             {launchSteps.map(([step, title, body]) => (
               <div key={step} className="signal-card">
                 <p className="eyebrow">{step}</p>
-                <h3 className="mt-3 font-display text-2xl text-white">{title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-300">{body}</p>
+                <h3 className="mt-2.5 font-display text-xl text-white sm:text-2xl">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-300">{body}</p>
               </div>
             ))}
           </div>

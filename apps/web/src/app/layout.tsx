@@ -22,7 +22,7 @@ export default async function RootLayout(props: Readonly<{ children: React.React
 
   return (
     <html lang="fr">
-      <body className="antialiased flex flex-col h-[100dvh] overflow-hidden">
+      <body className="antialiased flex min-h-[100dvh] flex-col overflow-x-clip">
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
           <div className="absolute left-[-8%] top-[-10%] h-72 w-72 rounded-full bg-cyan-400/15 blur-3xl" />
           <div className="absolute bottom-[-16%] right-[-8%] h-80 w-80 rounded-full bg-lime-400/10 blur-3xl" />
