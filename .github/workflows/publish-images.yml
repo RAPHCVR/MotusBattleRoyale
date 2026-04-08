@@ -18,6 +18,13 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      AUTH_BASE_URL: ${{ vars.AUTH_BASE_URL }}
+      NEXT_PUBLIC_GAME_WS_URL: ${{ vars.NEXT_PUBLIC_GAME_WS_URL }}
+      PASSKEY_RP_ID: ${{ vars.PASSKEY_RP_ID }}
+      PASSKEY_ORIGIN: ${{ vars.PASSKEY_ORIGIN }}
     strategy:
       fail-fast: false
       matrix:
@@ -28,12 +35,6 @@ jobs:
           - name: game
             image: ghcr.io/${{ github.repository_owner }}/motusbattleroyale-game
             dockerfile: apps/game/Dockerfile
-    env:
-      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-      AUTH_BASE_URL: ${{ vars.AUTH_BASE_URL }}
-      NEXT_PUBLIC_GAME_WS_URL: ${{ vars.NEXT_PUBLIC_GAME_WS_URL }}
-      PASSKEY_RP_ID: ${{ vars.PASSKEY_RP_ID }}
-      PASSKEY_ORIGIN: ${{ vars.PASSKEY_ORIGIN }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v5

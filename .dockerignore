@@ -1,6 +1,7 @@
 .git
 .turbo
 .env
+.docker-tmp
 .kilocode
 .playwright-cli
 node_modules

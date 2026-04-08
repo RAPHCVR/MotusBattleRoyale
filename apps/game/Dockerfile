@@ -26,7 +26,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts --package-import-method=copy
 COPY . .
 
 RUN pnpm --filter @motus/game build
-RUN pnpm deploy --filter @motus/game --prod /prod/game
+RUN pnpm deploy --filter @motus/game --prod --legacy /prod/game
 
 FROM node:24-bookworm-slim AS runner
 

@@ -36,6 +36,7 @@ COPY packages/ui/package.json packages/ui/package.json
 RUN pnpm install --frozen-lockfile --ignore-scripts --package-import-method=copy
 
 COPY . .
+RUN mkdir -p apps/web/public
 
 RUN pnpm --filter @motus/web build
 
