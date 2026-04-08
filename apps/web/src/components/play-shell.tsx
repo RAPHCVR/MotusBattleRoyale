@@ -317,6 +317,7 @@ export function PlayShell() {
   const compactTouchKeyboardVisible = compactTouchRound && fullscreenActive && showTouchKeyboard;
   const compactLobbySidebar = fullscreenActive && !prefersTouchInput && !isLiveRound;
   const compactLobbySidebarTight = compactLobbySidebar && viewportHeight > 0 && viewportHeight <= 820;
+  const compactMatchInfoStats = compactLobbySidebar || lockedSidebarToDesktop;
   const denseDesktopBoard = isLiveRound && !prefersTouchInput && (compactDesktopRound || compactDesktopKeyboard);
   const compactLiveRound = compactTouchRound || compactDesktopRound || compactDesktopKeyboard;
   const canToggleFullscreen = isFullscreenSupported || prefersTouchInput;
@@ -1848,10 +1849,16 @@ export function PlayShell() {
                       {matchInfoBody}
                     </p>
 
-                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                      {matchInfoStats.map((item) => (
-                        <div key={item.label} className="min-w-0 rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3">
-                          <p className="eyebrow truncate">{item.label}</p>
+                    <div className={clsx("mt-5 grid gap-3", compactMatchInfoStats ? "grid-cols-2" : "sm:grid-cols-3")}>
+                      {matchInfoStats.map((item, index) => (
+                        <div
+                          key={item.label}
+                          className={clsx(
+                            "min-w-0 rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3",
+                            compactMatchInfoStats && index === matchInfoStats.length - 1 && "col-span-2"
+                          )}
+                        >
+                          <p className={clsx("eyebrow", compactMatchInfoStats && "truncate")}>{item.label}</p>
                           <p className="mt-2 break-words text-base font-medium leading-snug text-white sm:text-lg">{item.value}</p>
                         </div>
                       ))}
