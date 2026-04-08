@@ -196,7 +196,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: web
-          image: ghcr.io/raphcvr/motusbattleroyale-web:sha-792b337
+          image: ghcr.io/raphcvr/motusbattleroyale-web:sha-a307032-1
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
