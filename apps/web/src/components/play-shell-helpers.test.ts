@@ -8,7 +8,8 @@ import {
   createEditableGuessPlaceholder,
   extractEditableGuess,
   getBlockedLetters,
-  getEditableSlotCount
+  getEditableSlotCount,
+  getKnownLetterLimits,
 } from "./play-shell-helpers";
 
 const singleHintBoard: BoardSnapshot = {
@@ -22,13 +23,13 @@ const singleHintBoard: BoardSnapshot = {
   canUseClue: false,
   roundResolved: false,
   roundSolved: false,
-  roundScore: 0
+  roundScore: 0,
 };
 
 const multiHintBoard: BoardSnapshot = {
   ...singleHintBoard,
   revealedIndexes: [0, 2],
-  hintLetters: ["P", "", "L", "", "", ""]
+  hintLetters: ["P", "", "L", "", "", ""],
 };
 
 const feedbackBoard: BoardSnapshot = {
@@ -36,13 +37,37 @@ const feedbackBoard: BoardSnapshot = {
   rows: [
     {
       guess: "PILOTE",
-      tiles: ["correct", "present", "absent", "absent", "absent", "absent"]
+      tiles: ["correct", "present", "absent", "absent", "absent", "absent"],
     },
     {
       guess: "PALAIS",
-      tiles: ["correct", "absent", "present", "absent", "present", "absent"]
-    }
-  ]
+      tiles: ["correct", "absent", "present", "absent", "present", "absent"],
+    },
+  ],
+};
+
+const duplicateLimitBoard: BoardSnapshot = {
+  ...singleHintBoard,
+  revealedIndexes: [],
+  hintLetters: ["", "", "", "", "", ""],
+  rows: [
+    {
+      guess: "AAABBB",
+      tiles: ["correct", "present", "absent", "absent", "absent", "absent"],
+    },
+  ],
+};
+
+const hintedDuplicateBoard: BoardSnapshot = {
+  ...singleHintBoard,
+  revealedIndexes: [0],
+  hintLetters: ["E", "", "", "", "", ""],
+  rows: [
+    {
+      guess: "EBOUEE",
+      tiles: ["correct", "absent", "absent", "absent", "present", "absent"],
+    },
+  ],
 };
 
 describe("play-shell helpers", () => {
@@ -61,7 +86,9 @@ describe("play-shell helpers", () => {
   it("reports the right number of editable slots", () => {
     expect(getEditableSlotCount(singleHintBoard)).toBe(5);
     expect(getEditableSlotCount(multiHintBoard)).toBe(4);
-    expect(createEditableGuessPlaceholder(multiHintBoard)).toBe("4 lettres restantes");
+    expect(createEditableGuessPlaceholder(multiHintBoard)).toBe(
+      "4 lettres restantes",
+    );
   });
 
   it("blocks only letters that are fully eliminated", () => {
@@ -70,8 +97,12 @@ describe("play-shell helpers", () => {
     expect(blockedLetters.has("L")).toBe(false);
     expect(blockedLetters.has("I")).toBe(false);
     expect(blockedLetters.has("O")).toBe(true);
-    expect(extractEditableGuess("IOUNI", singleHintBoard, blockedLetters)).toBe("IUNI");
-    expect(composeGuessDraft("IUNI", singleHintBoard, blockedLetters)).toBe("PIUNI");
+    expect(extractEditableGuess("IOUNI", singleHintBoard, blockedLetters)).toBe(
+      "IUNI",
+    );
+    expect(composeGuessDraft("IUNI", singleHintBoard, blockedLetters)).toBe(
+      "PIUNI",
+    );
   });
 
   it("promotes keyboard states with the right precedence", () => {
@@ -80,5 +111,52 @@ describe("play-shell helpers", () => {
     expect(keyboardStates.get("P")).toBe("correct");
     expect(keyboardStates.get("I")).toBe("present");
     expect(keyboardStates.get("L")).toBe("present");
+  });
+
+  it("caps extra copies once a letter has been fully accounted for", () => {
+    const blockedLetters = getBlockedLetters(duplicateLimitBoard);
+    const letterLimits = getKnownLetterLimits(duplicateLimitBoard);
+
+    expect(letterLimits.get("A")).toBe(2);
+    expect(letterLimits.get("B")).toBe(0);
+    expect(
+      extractEditableGuess(
+        "AAA",
+        duplicateLimitBoard,
+        blockedLetters,
+        letterLimits,
+      ),
+    ).toBe("AA");
+    expect(
+      composeGuessDraft(
+        "AAA",
+        duplicateLimitBoard,
+        blockedLetters,
+        letterLimits,
+      ),
+    ).toBe("AA");
+  });
+
+  it("counts locked letters toward the duplicate cap", () => {
+    const blockedLetters = getBlockedLetters(hintedDuplicateBoard);
+    const letterLimits = getKnownLetterLimits(hintedDuplicateBoard);
+
+    expect(letterLimits.get("E")).toBe(2);
+    expect(
+      extractEditableGuess(
+        "EEEE",
+        hintedDuplicateBoard,
+        blockedLetters,
+        letterLimits,
+      ),
+    ).toBe("E");
+    expect(
+      composeGuessDraft(
+        "EEEE",
+        hintedDuplicateBoard,
+        blockedLetters,
+        letterLimits,
+      ),
+    ).toBe("EE");
   });
 });

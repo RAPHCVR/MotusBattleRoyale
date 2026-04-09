@@ -61,6 +61,7 @@ COPY --from=builder --chown=node:node /app/node_modules/.pnpm/french-wordlist@1.
 COPY --from=builder --chown=node:node /app/node_modules/.pnpm/french-badwords-list@1.0.7/node_modules/french-badwords-list ./node_modules/french-badwords-list
 COPY --from=builder --chown=node:node /app/node_modules/.pnpm/french-wordlist@1.0.0/node_modules/french-wordlist ./packages/dictionary/node_modules/french-wordlist
 COPY --from=builder --chown=node:node /app/node_modules/.pnpm/french-badwords-list@1.0.7/node_modules/french-badwords-list ./packages/dictionary/node_modules/french-badwords-list
+USER node
 
 EXPOSE 3000
 

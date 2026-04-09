@@ -16,6 +16,7 @@ import {
   type KeyboardLetterState,
   getEditableSlotCount,
   getBlockedLetters,
+  getKnownLetterLimits,
   getLockedLetters
 } from "@/components/play-shell-helpers";
 
@@ -249,6 +250,11 @@ export function PlayShell() {
   const liveBoardSnapshot = boardIsStale ? null : boardSnapshot;
   const keyboardStates = useMemo(() => buildKeyboardLetterStates(liveBoardSnapshot), [liveBoardSnapshot]);
   const blockedLetters = useMemo(() => getBlockedLetters(liveBoardSnapshot), [liveBoardSnapshot]);
+  const knownLetterLimits = useMemo(() => getKnownLetterLimits(liveBoardSnapshot), [liveBoardSnapshot]);
+  const eliminatedLetters = useMemo(
+    () => Array.from(blockedLetters).sort((left, right) => left.localeCompare(right, "fr")),
+    [blockedLetters]
+  );
   const currentRoundNumber = deferredSnapshot ? deferredSnapshot.currentRoundIndex + 1 : 0;
   const finalistsCount = deferredSnapshot?.finalistsCount ?? 0;
   const activePlayerCount = deferredSnapshot?.activePlayerCount ?? roomSnapshot?.players.length ?? 0;
@@ -518,11 +524,21 @@ export function PlayShell() {
     if (roundChanged) {
       setGuess("");
     } else if (lockSignatureChanged && previousBoard) {
-      setGuess((current) => extractEditableGuess(composeGuessDraft(current, previousBoard), boardSnapshot, blockedLetters));
+      const previousBlockedLetters = getBlockedLetters(previousBoard);
+      const previousKnownLetterLimits = getKnownLetterLimits(previousBoard);
+
+      setGuess((current) =>
+        extractEditableGuess(
+          composeGuessDraft(current, previousBoard, previousBlockedLetters, previousKnownLetterLimits),
+          boardSnapshot,
+          blockedLetters,
+          knownLetterLimits
+        )
+      );
     }
 
     previousBoardRef.current = boardSnapshot;
-  }, [blockedLetters, boardSnapshot]);
+  }, [blockedLetters, boardSnapshot, knownLetterLimits]);
 
   useEffect(() => {
     if (boardIsStale) {
@@ -835,7 +851,7 @@ export function PlayShell() {
       return;
     }
 
-    const normalized = composeGuessDraft(guess, liveBoardSnapshot, blockedLetters);
+      const normalized = composeGuessDraft(guess, liveBoardSnapshot, blockedLetters, knownLetterLimits);
 
     if (normalized.length !== liveBoardSnapshot.wordLength) {
       setStatusMessage(`Il faut ${liveBoardSnapshot.wordLength} lettres.`);
@@ -856,7 +872,7 @@ export function PlayShell() {
       return;
     }
 
-    setGuess((current) => extractEditableGuess(`${current}${letter}`, liveBoardSnapshot, blockedLetters));
+      setGuess((current) => extractEditableGuess(`${current}${letter}`, liveBoardSnapshot, blockedLetters, knownLetterLimits));
   }
 
   function removeLetter() {
@@ -888,7 +904,10 @@ export function PlayShell() {
       return null;
     }
 
-    const iconTone = tone === "hint" || tone === "correct" || tone === "present" || tone === "absent" ? tone : null;
+    const iconTone =
+      tone === "hint" || tone === "correct" || tone === "present" || tone === "absent"
+        ? tone
+        : null;
 
     return (
       <span
@@ -901,7 +920,10 @@ export function PlayShell() {
           iconTone === "hint" && "border-cyan-950/12 bg-slate-950/12 text-slate-950"
         )}
       >
-        <FeedbackToneIcon tone={iconTone as Exclude<WordTileTone, "idle" | "pending">} className={compactDesktopKeyboard ? "h-2.25 w-2.25" : "h-2.5 w-2.5"} />
+        <FeedbackToneIcon
+          tone={iconTone as Exclude<WordTileTone, "idle" | "pending">}
+          className={compactDesktopKeyboard ? "h-2.25 w-2.25" : "h-2.5 w-2.5"}
+        />
       </span>
     );
   }
@@ -931,8 +953,8 @@ export function PlayShell() {
   const liveRows = liveBoardSnapshot?.rows ?? [];
   const lockedLetters = useMemo(() => getLockedLetters(liveBoardSnapshot), [liveBoardSnapshot]);
   const guessDraft = useMemo(
-    () => composeGuessDraft(guess, liveBoardSnapshot, blockedLetters),
-    [blockedLetters, liveBoardSnapshot, guess]
+    () => composeGuessDraft(guess, liveBoardSnapshot, blockedLetters, knownLetterLimits),
+    [blockedLetters, liveBoardSnapshot, guess, knownLetterLimits]
   );
   const editableSlotCount = useMemo(() => getEditableSlotCount(liveBoardSnapshot), [liveBoardSnapshot]);
   const displayRows = useMemo(() => {
@@ -1488,7 +1510,7 @@ export function PlayShell() {
                                   }
                                 }}
                                 onBlur={() => setIsInputFocused(false)}
-                                onChange={(event) => setGuess(extractEditableGuess(event.target.value, liveBoardSnapshot, blockedLetters))}
+                                onChange={(event) => setGuess(extractEditableGuess(event.target.value, liveBoardSnapshot, blockedLetters, knownLetterLimits))}
                                 onKeyDown={(event) => {
                                   if (event.key === "Enter") {
                                     event.preventDefault();
@@ -1639,25 +1661,52 @@ export function PlayShell() {
                     </div>
                   </div>
 
-                  <div className={clsx("hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block", isLiveRound && "xl:hidden")}>
-                    <p className="eyebrow">Repères</p>
-                    <div className="mt-4 space-y-3">
-                      {feedbackLegend.map((item) => (
-                        <div key={item.key} className="flex items-start gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3">
-                          <div className="w-11 shrink-0">
-                            <WordTile letter={item.letter} state={item.state} hint={item.hint} />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <FeedbackToneIcon tone={item.tone} className="h-3.5 w-3.5 text-slate-200" />
-                              <p className="text-sm font-medium text-white">{item.title}</p>
-                            </div>
-                            <p className="mt-1 text-xs leading-5 text-slate-400">{item.body}</p>
-                          </div>
+                  {isLiveRound ? (
+                    <div className="rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="eyebrow">Lettres éliminées</p>
+                          <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">Ardoise totale</h3>
                         </div>
-                      ))}
+                        <MetricBadge label="Total" value={eliminatedLetters.length} tone="danger" />
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {eliminatedLetters.length ? (
+                          eliminatedLetters.map((letter) => (
+                            <span
+                              key={letter}
+                              className="rounded-full border border-slate-400/25 bg-slate-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-100"
+                            >
+                              {letter}
+                            </span>
+                          ))
+                        ) : (
+                          <p className="text-sm leading-6 text-slate-400">Aucune lettre totalement éliminée.</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className={clsx("hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block", compactLobbySidebar && "xl:hidden")}>
+                      <p className="eyebrow">Repères</p>
+                      <div className="mt-4 space-y-3">
+                        {feedbackLegend.map((item) => (
+                          <div key={item.key} className="flex items-start gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3">
+                            <div className="w-11 shrink-0">
+                              <WordTile letter={item.letter} state={item.state} hint={item.hint} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <FeedbackToneIcon tone={item.tone} className="h-3.5 w-3.5 text-slate-200" />
+                                <p className="text-sm font-medium text-white">{item.title}</p>
+                              </div>
+                              <p className="mt-1 text-xs leading-5 text-slate-400">{item.body}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div
                     className={clsx(

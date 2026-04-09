@@ -163,6 +163,31 @@ Original prompt: Dis moi que faire, pour effectuer, le meilleur Motus Like, Batt
     - home desktop: `.playwright-cli/page-2026-03-26T14-33-05-321Z.png`
     - play desktop live room: `.playwright-cli/page-2026-03-26T14-37-17-527Z.png`
     - play mobile live room: `.playwright-cli/page-2026-03-26T14-37-22-376Z.png`
-  - Matching browser console logs remained clean:
-    - `.playwright-cli/console-2026-03-26T14-33-11-447Z.log`
-    - `.playwright-cli/console-2026-03-26T14-37-16-976Z.log`
+- Matching browser console logs remained clean:
+  - `.playwright-cli/console-2026-03-26T14-33-11-447Z.log`
+  - `.playwright-cli/console-2026-03-26T14-37-16-976Z.log`
+
+2026-04-09
+- Re-validated the current local worktree in `.tmp/MotusBattleRoyale`:
+  - `corepack pnpm --filter @motus/web test` passed.
+  - `corepack pnpm --filter @motus/web typecheck` passed.
+  - `corepack pnpm --filter @motus/web build` passed.
+  - `corepack pnpm --filter @motus/game test` passed.
+- Live cluster check:
+  - Current ingress is `motus.raphcvr.me` for the web app and `/realtime` for the game.
+  - `kubectl rollout status` is green for both `motus-web` and `motus-game`.
+  - Public browser smoke on two guest sessions reached a live public round at `motus.raphcvr.me/play`.
+  - Horizontal overflow was not present at `1600x1000`.
+  - The live deployment still looks behind the local worktree for the newest right-rail live-state UI: the deployed round view shows the old right-side layout, while the local code already has the `Lettres éliminées` live card.
+  - A direct live guess test with a known local word (`EBOUEE`) was rejected as "Mot introuvable dans le dictionnaire", which is another sign the running image is not yet the same as the freshly validated local tree.
+- Deployment was intentionally not done because the game is live.
+- Rebased the local `play-shell.tsx` changes onto `origin/main` and kept the upstream layout behavior while restoring the live-round additions:
+  - live rounds now show `Lettres éliminées` instead of the old `Repères` card
+  - duplicate-letter caps now apply to both typed input and the virtual keyboard
+  - the keyboard gets the small tone icon overlay again
+- Validation after the merge cleanup:
+  - `corepack pnpm --filter @motus/web test` passed.
+  - `corepack pnpm --filter @motus/web typecheck` passed after the build completed.
+  - `corepack pnpm --filter @motus/web build` passed.
+  - `corepack pnpm --filter @motus/game test` passed.
+- Local browser smoke could not be rerun here because Docker Desktop is not available in this environment, so `docker compose up` cannot start the local stack. The code is still validated through tests and typecheck/build.
