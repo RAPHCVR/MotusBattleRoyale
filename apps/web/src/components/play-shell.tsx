@@ -1687,7 +1687,7 @@ export function PlayShell() {
                       </div>
                     </div>
                   ) : (
-                    <div className={clsx("hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block", compactLobbySidebar && "xl:hidden")}>
+                    <div className="hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block">
                       <p className="eyebrow">Repères</p>
                       <div className="mt-4 space-y-3">
                         {feedbackLegend.map((item) => (
