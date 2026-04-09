@@ -12,6 +12,7 @@ test-results
 artifacts
 output
 .playwright-cli
+.docker-tmp
 .kilocode
 .wrangler
 .tmp

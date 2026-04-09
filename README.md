@@ -138,12 +138,38 @@ You can also use `CLOUDFLARED_TUNNEL_NAME` instead of the tunnel ID.
 
 The generated file `infra/cloudflared/config.yml` is intentionally ignored.
 
+## Kubernetes
+
+A production-oriented Kustomize overlay is available under [infra/kubernetes/production](C:/Users/rchauvier/OneDrive%20-%20AUBAY/Documents/MotusBattleRoyal/infra/kubernetes/production/README.md).
+
+It includes:
+
+- `web` and `game` deployments with health probes and rolling updates
+- `postgres` and `redis` persistent stateful workloads
+- separate ingress objects for the frontend host and the realtime host
+- GHCR-ready image names for `web` and `game`
+
+Render or validate it locally with:
+
+```powershell
+corepack pnpm kube:render
+corepack pnpm kube:validate
+```
+
+Apply it with:
+
+```powershell
+kubectl apply -k infra/kubernetes/production
+```
+
 ## Useful Commands
 
 ```powershell
 corepack pnpm --filter @motus/web build
 corepack pnpm --filter @motus/game build
 docker compose build web game
+corepack pnpm kube:render
+corepack pnpm kube:validate
 docker compose logs -f web
 docker compose logs -f game
 node .\scripts\render-cloudflared-config.mjs

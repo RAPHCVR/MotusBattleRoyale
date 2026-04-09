@@ -14,6 +14,8 @@
     "docker:build": "docker compose build web game",
     "docker:down": "docker compose down",
     "docker:up": "docker compose up -d postgres redis game web caddy",
+    "kube:render": "kubectl kustomize infra/kubernetes/production",
+    "kube:validate": "kubectl kustomize infra/kubernetes/production",
     "lint": "corepack pnpm --recursive --if-present lint",
     "test": "corepack pnpm --recursive --if-present test",
     "typecheck": "corepack pnpm --recursive --if-present typecheck",
