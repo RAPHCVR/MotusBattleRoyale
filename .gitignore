@@ -16,5 +16,7 @@ output
 .kilocode
 .wrangler
 .tmp
+fresh-dev*.log
+restart*.log
 infra/cloudflared/.cloudflared
 infra/cloudflared/config.yml

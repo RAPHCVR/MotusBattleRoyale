@@ -218,10 +218,12 @@ export function PlayShell() {
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const [viewportInsetBottom, setViewportInsetBottom] = useState(0);
 
   const roomRef = useRef<Room | null>(null);
   const clientRef = useRef<Client | null>(null);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
+  const liveDockRef = useRef<HTMLDivElement | null>(null);
   const previousBoardRef = useRef<BoardSnapshot | null>(null);
   const previousPlayerStatusRef = useRef<string | null>(null);
   const playSurfaceRef = useRef<HTMLDivElement | null>(null);
@@ -231,6 +233,7 @@ export function PlayShell() {
   const [isFullscreenSupported, setIsFullscreenSupported] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
+  const [liveDockHeight, setLiveDockHeight] = useState(0);
 
   const deferredSnapshot = useDeferredValue(roomSnapshot);
   const sessionUser = session?.user as { id: string; name: string; email: string; isAnonymous?: boolean } | undefined;
@@ -299,6 +302,8 @@ export function PlayShell() {
   const phaseBadgeValue = getPhaseBadgeValue(roomPhase);
   const modeLabel = getModeLabel(roomSnapshot?.modifier);
   const fullscreenActive = isFullscreen || isPseudoFullscreen;
+  const shortTouchViewport = prefersTouchInput && viewportHeight > 0 && viewportHeight <= 760;
+  const compactTouchRoomShell = prefersTouchInput && isInRoom && !isLiveRound && (fullscreenActive || (viewportHeight > 0 && viewportHeight <= 860));
   const showCompactReveal = showRoundReveal && (fullscreenActive || prefersTouchInput || (viewportHeight > 0 && viewportHeight <= 880));
   const showVirtualKeyboard = prefersTouchInput ? fullscreenActive && showTouchKeyboard : showDesktopKeyboard;
   const isSubmittingSession = pendingAction === "guest" || pendingAction === "upgrade" || pendingAction === "signin" || pendingAction === "passkeySignIn";
@@ -308,6 +313,7 @@ export function PlayShell() {
   const privateJoinPending = pendingAction === "privateJoin";
   const lockedSidebarToDesktop = isLiveRound && !prefersTouchInput;
   const compactTouchRound = isLiveRound && prefersTouchInput;
+  const compactTouchKeyboardVisible = compactTouchRound && fullscreenActive && showTouchKeyboard;
   const compactDesktopRound = isLiveRound && !prefersTouchInput && viewportHeight > 0 && viewportHeight <= 860;
   const desktopVisualKeyboardOpen = isLiveRound && !prefersTouchInput && showVirtualKeyboard;
   const compactDesktopKeyboard = desktopVisualKeyboardOpen && (fullscreenActive || compactDesktopRound || (viewportHeight > 0 && viewportHeight <= 920));
@@ -315,6 +321,9 @@ export function PlayShell() {
   const denseDesktopBoard = isLiveRound && !prefersTouchInput && (compactDesktopRound || compactDesktopKeyboard);
   const compactLiveRound = compactTouchRound || compactDesktopRound || compactDesktopKeyboard;
   const canToggleFullscreen = isFullscreenSupported || prefersTouchInput;
+  const nativeKeyboardInset = prefersTouchInput ? viewportInsetBottom : 0;
+  const nativeKeyboardActive = isLiveRound && prefersTouchInput && isInputFocused && !showTouchKeyboard && nativeKeyboardInset > 0;
+  const mobilePinnedDock = isLiveRound && prefersTouchInput;
   const roomCodeLabel = roomSnapshot?.roomCode ?? "Public";
   const matchInfoTitle =
     roomPhase === "results"
@@ -373,18 +382,28 @@ export function PlayShell() {
   const liveBoardMaxWidth = isLiveRound
     ? prefersTouchInput
       ? fullscreenActive
-        ? "max(13.75rem, min(17rem, calc(100dvh - 24rem)))"
-        : "max(12.75rem, min(15rem, calc(100dvh - 29rem)))"
+        ? compactTouchKeyboardVisible
+          ? "min(100%, 21rem)"
+          : "min(100%, 22rem)"
+        : "min(100%, 19.5rem)"
       : compactDesktopKeyboard
         ? "max(16rem, min(18.5rem, calc(100dvh - 27rem)))"
       : compactDesktopRound
         ? "max(17rem, min(20rem, calc(100dvh - 23rem)))"
         : "max(20rem, min(27rem, calc(100dvh - 24rem)))"
-    : "34rem";
+    : compactTouchRoomShell
+      ? shortTouchViewport
+        ? "min(100%, 17rem)"
+        : "min(100%, 19rem)"
+      : prefersTouchInput && isInRoom
+        ? "min(100%, 20rem)"
+        : "34rem";
   const liveDockMaxWidth = isLiveRound
     ? prefersTouchInput
       ? fullscreenActive
-        ? "min(100%, 22rem)"
+        ? compactTouchKeyboardVisible
+          ? "min(100%, 21rem)"
+          : "min(100%, 22rem)"
         : "min(100%, 19.5rem)"
       : compactDesktopKeyboard
         ? "min(100%, 24rem)"
@@ -392,7 +411,9 @@ export function PlayShell() {
         ? "max(18rem, min(24rem, calc(100dvh - 19rem)))"
         : "max(22rem, min(31rem, calc(100dvh - 21rem)))"
     : "34rem";
-  const virtualKeyboardMaxWidth = compactTouchRound ? "min(100%, 20rem)" : compactDesktopKeyboard ? "min(100%, 24rem)" : "34rem";
+  const virtualKeyboardMaxWidth = compactTouchKeyboardVisible ? "min(100%, 19rem)" : compactTouchRound ? "min(100%, 20rem)" : compactDesktopKeyboard ? "min(100%, 24rem)" : "34rem";
+  const mobilePinnedDockSpacing = mobilePinnedDock ? liveDockHeight + nativeKeyboardInset + 12 : 0;
+  const mobilePinnedDockOffset = mobilePinnedDock ? nativeKeyboardInset : 0;
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 250);
@@ -404,10 +425,14 @@ export function PlayShell() {
 
     const syncInputMode = () => {
       const prefersTouch = mediaQuery.matches || window.innerWidth < 768;
-      const visualViewportHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
+      const visualViewport = window.visualViewport;
+      const visualViewportHeight = Math.round(visualViewport?.height ?? window.innerHeight);
+      const visualViewportOffsetTop = Math.max(0, Math.round(visualViewport?.offsetTop ?? 0));
+      const visualViewportInsetBottom = Math.max(0, window.innerHeight - visualViewportHeight - visualViewportOffsetTop);
 
       setPrefersTouchInput(prefersTouch);
       setViewportHeight(visualViewportHeight);
+      setViewportInsetBottom(visualViewportInsetBottom);
 
       if (prefersTouch) {
         setShowDesktopKeyboard(false);
@@ -431,6 +456,35 @@ export function PlayShell() {
       window.visualViewport?.removeEventListener("scroll", handleViewportChange);
     };
   }, []);
+
+  useEffect(() => {
+    const liveDockElement = liveDockRef.current;
+
+    if (!liveDockElement || !mobilePinnedDock) {
+      setLiveDockHeight(0);
+      return;
+    }
+
+    const syncLiveDockHeight = () => {
+      setLiveDockHeight(Math.ceil(liveDockElement.getBoundingClientRect().height));
+    };
+
+    syncLiveDockHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      syncLiveDockHeight();
+    });
+
+    observer.observe(liveDockElement);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [mobilePinnedDock]);
 
   useEffect(() => {
     const canFullscreen = Boolean(document.fullscreenEnabled && playSurfaceRef.current?.requestFullscreen);
@@ -577,18 +631,29 @@ export function PlayShell() {
   }, [liveBoardSnapshot?.roundIndex, localPlayer?.status, roomPhase]);
 
   useEffect(() => {
-    if (!isLiveRound) {
-      setShowTouchKeyboard(false);
+    if (!prefersTouchInput || !isInputFocused || showTouchKeyboard || fullscreenActive) {
       return;
     }
 
-    const main = document.querySelector("main");
-    requestAnimationFrame(() => {
-      if (main instanceof HTMLElement) {
-        main.scrollTop = 0;
-      }
-    });
-  }, [isLiveRound, liveBoardSnapshot?.roundIndex]);
+    const target = guessInputRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    const syncFocusedInput = () => {
+      target.scrollIntoView({
+        block: "end",
+        inline: "nearest"
+      });
+    };
+
+    const frame = window.requestAnimationFrame(syncFocusedInput);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [fullscreenActive, isInputFocused, prefersTouchInput, showTouchKeyboard]);
 
   async function toggleFullscreen() {
     if (!playSurfaceRef.current) {
@@ -1288,11 +1353,11 @@ export function PlayShell() {
 
                     <div
                       className={clsx(
-                      "min-h-0 rounded-[30px] border border-white/8 bg-slate-950/72",
-                      compactTouchRound ? "relative p-2.5" : compactLiveRound ? "p-3" : "p-4 sm:p-5",
-                      isLiveRound && "flex h-full flex-col overflow-hidden"
-                    )}
-                  >
+                        "min-h-0 rounded-[30px] border border-white/8 bg-slate-950/72",
+                        compactTouchRound ? "relative p-2.5" : compactLiveRound ? "p-3" : "p-4 sm:p-5",
+                        isLiveRound && "flex h-full flex-col overflow-hidden"
+                  )}
+                >
                     <div
                       className={clsx(
                         "flex flex-col gap-3",
@@ -1387,9 +1452,9 @@ export function PlayShell() {
                     <div
                       className={clsx(
                         isLiveRound && "min-h-0 flex-1",
-                        compactTouchRound && "flex items-start justify-center pt-1 pb-[7.5rem]",
-                        compactTouchRound && showVirtualKeyboard && "pb-[16.75rem]"
+                        compactTouchRound && "flex items-center justify-center py-2"
                       )}
+                      style={compactTouchRound ? { paddingBottom: mobilePinnedDockSpacing } : undefined}
                     >
                       {boardIsStale ? (
                         <div className="mx-auto w-full max-w-[34rem] rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-8 text-center">
@@ -1432,15 +1497,19 @@ export function PlayShell() {
 
                     {isLiveRound && (
                       <div
+                        ref={liveDockRef}
                         className={clsx(
                           "z-30 mx-auto w-full",
                           compactTouchRound
-                            ? "pointer-events-none absolute inset-x-2 bottom-2"
+                            ? "pointer-events-none absolute inset-x-2"
                             : prefersTouchInput
                               ? "sticky bottom-0 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
                               : "mt-auto pt-2"
                         )}
-                        style={{ maxWidth: liveDockMaxWidth }}
+                        style={{
+                          maxWidth: liveDockMaxWidth,
+                          bottom: compactTouchRound ? `calc(${mobilePinnedDockOffset}px + 0.5rem)` : undefined
+                        }}
                       >
                         <div
                           className={clsx(
@@ -1560,7 +1629,7 @@ export function PlayShell() {
                               </div>
                             </form>
 
-                            {compactTouchRound && fullscreenActive ? (
+                            {compactTouchRound && fullscreenActive && !nativeKeyboardActive ? (
                               <button
                                 className={clsx(
                                   "self-start rounded-full border px-3 py-1 text-[11px] text-slate-100 transition",
