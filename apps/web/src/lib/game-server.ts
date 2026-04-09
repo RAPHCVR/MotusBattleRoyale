@@ -1,7 +1,9 @@
 import { ticketBundleSchema } from "@motus/protocol";
 
+import { auth } from "./auth";
 import { env } from "./env";
 import { ensurePlayerProfile } from "./player-profile";
+import { getSessionFromHeaders } from "./session";
 
 function isLoopbackHost(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1";
@@ -109,53 +111,19 @@ export function resolveTicketWsEndpoint(
 }
 
 async function createOneTimeToken(headers: Headers) {
-  const cookie = headers.get("cookie") ?? "";
-
-  if (!cookie) {
-    throw new Error("Unauthorized.");
-  }
-
-  const authOrigin = resolveAppOrigin(headers);
-  const sessionResponse = await fetch(`${authOrigin}/api/auth/get-session`, {
-    method: "GET",
-    headers: {
-      cookie,
-    },
-    cache: "no-store",
-  });
-
-  if (!sessionResponse.ok) {
-    throw new Error("Unauthorized.");
-  }
-
-  const session = (await sessionResponse.json()) as {
-    user: {
-      id: string;
-      name: string;
-    };
-  } | null;
+  const session = await getSessionFromHeaders(headers);
 
   if (!session) {
     throw new Error("Unauthorized.");
   }
 
   await ensurePlayerProfile(session.user);
-  const response = await fetch(
-    `${authOrigin}/api/auth/one-time-token/generate`,
-    {
-      method: "GET",
-      headers: {
-        cookie,
-      },
-      cache: "no-store",
-    },
-  );
+  const payload = await auth.api.generateOneTimeToken({ headers });
 
-  if (!response.ok) {
+  if (!payload?.token) {
     throw new Error("Unable to generate one-time token.");
   }
 
-  const payload = (await response.json()) as { token: string };
   return payload.token;
 }
 

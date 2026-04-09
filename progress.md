@@ -191,3 +191,18 @@ Original prompt: Dis moi que faire, pour effectuer, le meilleur Motus Like, Batt
   - `corepack pnpm --filter @motus/web build` passed.
   - `corepack pnpm --filter @motus/game test` passed.
 - Local browser smoke could not be rerun here because Docker Desktop is not available in this environment, so `docker compose up` cannot start the local stack. The code is still validated through tests and typecheck/build.
+
+2026-04-09, motus private room auth fix:
+- Root cause isolated on `POST /api/game/private-ticket`:
+  - the helper re-fetched `/api/auth/get-session` and `/api/auth/one-time-token/generate` over HTTP instead of using Better Auth server APIs directly;
+  - the in-cluster game server itself was fine, but the web-side auth hop was returning `Unauthorized`.
+- Fix applied:
+  - `apps/web/src/lib/game-server.ts` now calls `getSessionFromHeaders()` and `auth.api.generateOneTimeToken()` directly;
+  - `apps/web/src/lib/auth.ts` keeps plugin typing precise so the one-time-token server method is available to TypeScript;
+  - `apps/web/src/lib/game-server-ticket.test.ts` covers the private-ticket path and proves no auth HTTP rebounce is needed.
+- Validation:
+  - `corepack pnpm --filter @motus/web typecheck`: OK
+  - `corepack pnpm --filter @motus/web test -- --runInBand`: OK
+  - `corepack pnpm --filter @motus/web build`: OK
+- Kube note:
+  - live `motus-web` is still on `ghcr.io/raphcvr/motusbattleroyale-web:sha-7c86430` at the time of this check; once the new image is published, the deployment still needs to roll forward to the new SHA.

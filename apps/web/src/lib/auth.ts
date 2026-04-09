@@ -51,7 +51,7 @@ const trustedOrigins = Array.from(
   )
 );
 
-const plugins: any[] = [
+const basePlugins = [
   nextCookies(),
   anonymous({
     generateName: async () => createGuestName(nanoid(8)),
@@ -70,15 +70,16 @@ const plugins: any[] = [
   })
 ];
 
-if (env.TURNSTILE_SECRET_KEY) {
-  plugins.push(
-    captcha({
-      provider: "cloudflare-turnstile",
-      secretKey: env.TURNSTILE_SECRET_KEY,
-      endpoints: ["/sign-up/email", "/sign-in/email", "/sign-in/anonymous"]
-    })
-  );
-}
+const plugins = env.TURNSTILE_SECRET_KEY
+  ? [
+      ...basePlugins,
+      captcha({
+        provider: "cloudflare-turnstile",
+        secretKey: env.TURNSTILE_SECRET_KEY,
+        endpoints: ["/sign-up/email", "/sign-in/email", "/sign-in/anonymous"]
+      })
+    ]
+  : basePlugins;
 
 export const auth = betterAuth({
   database:
