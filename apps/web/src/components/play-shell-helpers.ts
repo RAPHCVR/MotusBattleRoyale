@@ -1,23 +1,34 @@
 import { normalizeWord } from "@motus/dictionary";
 import type { BoardSnapshot, GuessTileState } from "@motus/protocol";
 
-type LockAwareBoard = Pick<BoardSnapshot, "wordLength" | "revealedIndexes" | "hintLetters">;
-type KeyboardAwareBoard = Pick<BoardSnapshot, "rows" | "revealedIndexes" | "hintLetters">;
+type LockAwareBoard = Pick<
+  BoardSnapshot,
+  "wordLength" | "revealedIndexes" | "hintLetters"
+>;
+type KeyboardAwareBoard = Pick<
+  BoardSnapshot,
+  "rows" | "revealedIndexes" | "hintLetters"
+>;
 
-export type KeyboardLetterState = "unused" | "absent" | "hint" | "present" | "correct";
+export type KeyboardLetterState =
+  | "unused"
+  | "absent"
+  | "hint"
+  | "present"
+  | "correct";
 
 const keyboardStatePriority: Record<KeyboardLetterState, number> = {
   unused: 0,
   absent: 1,
   hint: 2,
   present: 3,
-  correct: 4
+  correct: 4,
 };
 
 function promoteKeyboardState(
   keyboardStates: Map<string, KeyboardLetterState>,
   letter: string,
-  nextState: KeyboardLetterState
+  nextState: KeyboardLetterState,
 ): void {
   if (!letter) {
     return;
@@ -30,7 +41,9 @@ function promoteKeyboardState(
   }
 }
 
-function mapTileStateToKeyboardState(tile: GuessTileState): KeyboardLetterState {
+function mapTileStateToKeyboardState(
+  tile: GuessTileState,
+): KeyboardLetterState {
   switch (tile) {
     case "correct":
       return "correct";
@@ -43,7 +56,9 @@ function mapTileStateToKeyboardState(tile: GuessTileState): KeyboardLetterState 
   }
 }
 
-export function getLockedLetters(boardSnapshot?: LockAwareBoard | null): string[] {
+export function getLockedLetters(
+  boardSnapshot?: LockAwareBoard | null,
+): string[] {
   if (!boardSnapshot) {
     return [];
   }
@@ -51,22 +66,28 @@ export function getLockedLetters(boardSnapshot?: LockAwareBoard | null): string[
   const lockedIndexes = new Set(boardSnapshot.revealedIndexes);
 
   return Array.from({ length: boardSnapshot.wordLength }, (_, index) =>
-    lockedIndexes.has(index) ? boardSnapshot.hintLetters[index] ?? "" : ""
+    lockedIndexes.has(index) ? (boardSnapshot.hintLetters[index] ?? "") : "",
   );
 }
 
-export function getEditableSlotCount(boardSnapshot?: LockAwareBoard | null): number {
+export function getEditableSlotCount(
+  boardSnapshot?: LockAwareBoard | null,
+): number {
   if (!boardSnapshot) {
     return 0;
   }
 
-  return Math.max(0, boardSnapshot.wordLength - boardSnapshot.revealedIndexes.length);
+  return Math.max(
+    0,
+    boardSnapshot.wordLength - boardSnapshot.revealedIndexes.length,
+  );
 }
 
 export function extractEditableGuess(
   rawInput: string,
   boardSnapshot?: LockAwareBoard | null,
-  blockedLetters: ReadonlySet<string> = new Set()
+  blockedLetters: ReadonlySet<string> = new Set(),
+  letterLimits: ReadonlyMap<string, number> = new Map(),
 ): string {
   if (!boardSnapshot) {
     return "";
@@ -74,11 +95,25 @@ export function extractEditableGuess(
 
   const normalized = normalizeWord(rawInput);
   const lockedLetters = getLockedLetters(boardSnapshot);
+  const usageCounts = new Map<string, number>();
   const editableGuess: string[] = [];
   const maxEditableLength = getEditableSlotCount(boardSnapshot);
   let inputIndex = 0;
 
-  for (let index = 0; index < boardSnapshot.wordLength && editableGuess.length < maxEditableLength; index += 1) {
+  for (const lockedLetter of lockedLetters) {
+    if (!lockedLetter) {
+      continue;
+    }
+
+    usageCounts.set(lockedLetter, (usageCounts.get(lockedLetter) ?? 0) + 1);
+  }
+
+  for (
+    let index = 0;
+    index < boardSnapshot.wordLength &&
+    editableGuess.length < maxEditableLength;
+    index += 1
+  ) {
     const lockedLetter = lockedLetters[index];
 
     if (lockedLetter) {
@@ -99,7 +134,17 @@ export function extractEditableGuess(
       continue;
     }
 
+    const letterLimit = letterLimits.get(nextLetter);
+    if (
+      letterLimit !== undefined &&
+      (usageCounts.get(nextLetter) ?? 0) >= letterLimit
+    ) {
+      inputIndex += 1;
+      continue;
+    }
+
     editableGuess.push(nextLetter);
+    usageCounts.set(nextLetter, (usageCounts.get(nextLetter) ?? 0) + 1);
     inputIndex += 1;
   }
 
@@ -109,21 +154,30 @@ export function extractEditableGuess(
 export function composeGuessDraft(
   editableGuess: string,
   boardSnapshot?: LockAwareBoard | null,
-  blockedLetters: ReadonlySet<string> = new Set()
+  blockedLetters: ReadonlySet<string> = new Set(),
+  letterLimits: ReadonlyMap<string, number> = new Map(),
 ): string {
   if (!boardSnapshot) {
     return "";
   }
 
   const lockedLetters = getLockedLetters(boardSnapshot);
-  const editableLetters = extractEditableGuess(editableGuess, boardSnapshot, blockedLetters).split("");
+  const editableLetters = extractEditableGuess(
+    editableGuess,
+    boardSnapshot,
+    blockedLetters,
+    letterLimits,
+  ).split("");
 
-  return Array.from({ length: boardSnapshot.wordLength }, (_, index) => lockedLetters[index] || editableLetters.shift() || "").join(
-    ""
-  );
+  return Array.from(
+    { length: boardSnapshot.wordLength },
+    (_, index) => lockedLetters[index] || editableLetters.shift() || "",
+  ).join("");
 }
 
-export function createEditableGuessPlaceholder(boardSnapshot?: LockAwareBoard | null): string {
+export function createEditableGuessPlaceholder(
+  boardSnapshot?: LockAwareBoard | null,
+): string {
   const editableSlotCount = getEditableSlotCount(boardSnapshot);
 
   if (!boardSnapshot) {
@@ -134,10 +188,14 @@ export function createEditableGuessPlaceholder(boardSnapshot?: LockAwareBoard | 
     return "Mot complété";
   }
 
-  return editableSlotCount === 1 ? "1 lettre restante" : `${editableSlotCount} lettres restantes`;
+  return editableSlotCount === 1
+    ? "1 lettre restante"
+    : `${editableSlotCount} lettres restantes`;
 }
 
-export function buildKeyboardLetterStates(boardSnapshot?: KeyboardAwareBoard | null): Map<string, KeyboardLetterState> {
+export function buildKeyboardLetterStates(
+  boardSnapshot?: KeyboardAwareBoard | null,
+): Map<string, KeyboardLetterState> {
   const keyboardStates = new Map<string, KeyboardLetterState>();
 
   if (!boardSnapshot) {
@@ -145,19 +203,82 @@ export function buildKeyboardLetterStates(boardSnapshot?: KeyboardAwareBoard | n
   }
 
   for (const index of boardSnapshot.revealedIndexes) {
-    promoteKeyboardState(keyboardStates, boardSnapshot.hintLetters[index] ?? "", "hint");
+    promoteKeyboardState(
+      keyboardStates,
+      boardSnapshot.hintLetters[index] ?? "",
+      "hint",
+    );
   }
 
   for (const row of boardSnapshot.rows) {
     row.tiles.forEach((tile, index) => {
-      promoteKeyboardState(keyboardStates, row.guess[index] ?? "", mapTileStateToKeyboardState(tile));
+      promoteKeyboardState(
+        keyboardStates,
+        row.guess[index] ?? "",
+        mapTileStateToKeyboardState(tile),
+      );
     });
   }
 
   return keyboardStates;
 }
 
-export function getBlockedLetters(boardSnapshot?: KeyboardAwareBoard | null): Set<string> {
+export function getKnownLetterLimits(
+  boardSnapshot?: KeyboardAwareBoard | null,
+): Map<string, number> {
+  const knownLimits = new Map<string, number>();
+
+  if (!boardSnapshot) {
+    return knownLimits;
+  }
+
+  for (const row of boardSnapshot.rows) {
+    const rowUsage = new Map<
+      string,
+      { confirmed: number; hasAbsent: boolean }
+    >();
+
+    row.tiles.forEach((tile, index) => {
+      const letter = row.guess[index] ?? "";
+
+      if (!letter) {
+        return;
+      }
+
+      const nextUsage = rowUsage.get(letter) ?? {
+        confirmed: 0,
+        hasAbsent: false,
+      };
+
+      if (tile === "absent") {
+        nextUsage.hasAbsent = true;
+      } else if (tile === "correct" || tile === "present") {
+        nextUsage.confirmed += 1;
+      }
+
+      rowUsage.set(letter, nextUsage);
+    });
+
+    for (const [letter, usage] of rowUsage.entries()) {
+      if (!usage.hasAbsent) {
+        continue;
+      }
+
+      const exactLimit = usage.confirmed;
+      const currentLimit = knownLimits.get(letter);
+
+      if (currentLimit === undefined || exactLimit < currentLimit) {
+        knownLimits.set(letter, exactLimit);
+      }
+    }
+  }
+
+  return knownLimits;
+}
+
+export function getBlockedLetters(
+  boardSnapshot?: KeyboardAwareBoard | null,
+): Set<string> {
   const keyboardStates = buildKeyboardLetterStates(boardSnapshot);
   const blockedLetters = new Set<string>();
 
