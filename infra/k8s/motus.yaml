@@ -82,7 +82,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: game
-          image: ghcr.io/raphcvr/motusbattleroyale-game@sha256:01b8e4406b7f21232d1c7b7a6eb992b09e2e6de2ae9f3f3c0e60f47b29bce4de
+          image: ghcr.io/raphcvr/motusbattleroyale-game:latest
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
@@ -160,7 +160,8 @@ metadata:
   name: motus-web
   namespace: motus
   annotations:
-    keel.sh/policy: "glob:sha-*"
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
     keel.sh/trigger: poll
     keel.sh/pollSchedule: '@every 1m'
   labels:
@@ -196,7 +197,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: web
-          image: ghcr.io/raphcvr/motusbattleroyale-web@sha256:f0ea1ca6a3536c85c39c4d6f1096c1d90054acd8c0a1c68bb1df19ae114a8618
+          image: ghcr.io/raphcvr/motusbattleroyale-web:latest
           imagePullPolicy: Always
           envFrom:
             - configMapRef:

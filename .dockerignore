@@ -2,6 +2,8 @@
 .turbo
 .env
 .docker-tmp
+.tmp
+**/.tmp
 .kilocode
 .playwright-cli
 node_modules

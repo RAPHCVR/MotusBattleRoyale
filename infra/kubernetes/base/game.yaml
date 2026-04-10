@@ -75,7 +75,7 @@ spec:
       containers:
         - name: game
           image: motus-game:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 2567

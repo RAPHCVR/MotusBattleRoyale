@@ -7,7 +7,7 @@ ARG BUILD_REVISION=unknown
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.11.1 --activate
 
 FROM base AS builder
 
@@ -26,9 +26,8 @@ RUN pnpm install --frozen-lockfile --ignore-scripts --package-import-method=copy
 COPY . .
 
 RUN pnpm --filter @motus/game build
-RUN pnpm deploy --filter @motus/game --prod --legacy /prod/game
 
-FROM node:24-bookworm-slim AS runner
+FROM base AS runner
 
 ARG SOURCE_REPOSITORY=https://github.com/RAPHCVR/MotusBattleRoyale
 ARG BUILD_VERSION=0.1.0
@@ -43,10 +42,13 @@ ENV PORT=2567
 
 WORKDIR /app
 
-COPY --from=builder --chown=node:node /prod/game ./
+COPY --from=builder --chown=node:node /app /app
+
+# Verify the runtime tree before publishing the image.
+RUN node -e "process.chdir('/app/apps/game'); require.resolve('express')"
 
 EXPOSE 2567
 
 USER node
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "/usr/local/bin/pnpm", "--filter", "@motus/game", "start"]

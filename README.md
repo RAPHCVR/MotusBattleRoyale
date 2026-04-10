@@ -148,6 +148,7 @@ It includes:
 - `postgres` and `redis` persistent stateful workloads
 - separate ingress objects for the frontend host and the realtime host
 - GHCR-ready image names for `web` and `game`
+- mutable `latest` tags for prod images, with Keel polling the cluster every minute
 
 Render or validate it locally with:
 

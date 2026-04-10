@@ -11,7 +11,7 @@ patches:
 images:
   - name: motus-web
     newName: ghcr.io/raphcvr/motusbattleroyale-web
-    newTag: sha-792b337
+    newTag: latest
   - name: motus-game
     newName: ghcr.io/raphcvr/motusbattleroyale-game
-    newTag: sha-792b337
+    newTag: latest

@@ -48,4 +48,4 @@ kubectl apply -k infra/kubernetes/production
 
 - `postgres-init-configmap.yaml` is idempotent, but it only runs automatically when the PostgreSQL data directory is empty.
 - The overlay currently points to `play-dev.raphcvr.me` and `rt-dev.raphcvr.me` to match the repo's current public settings.
-- The overlay is pinned to `sha-792b337`, which matches the successful GHCR publishing workflow run for commit `792b337`.
+- The overlay tracks the mutable `latest` tag for both images, and Keel polls the live cluster every minute to roll forward automatically.
