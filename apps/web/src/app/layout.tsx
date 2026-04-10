@@ -7,17 +7,20 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Motus Royale",
-  description: "Motus-like battle royale moderne, temps réel et FR-first."
+  description: "Motus-like battle royale moderne, temps réel et FR-first.",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#050a16"
+  interactiveWidget: "resizes-content",
+  themeColor: "#050a16",
 };
 
-export default async function RootLayout(props: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout(
+  props: Readonly<{ children: React.ReactNode }>,
+) {
   const metrics = await getGameMetrics();
 
   return (

@@ -2,6 +2,7 @@
 
 import {
   type FormEvent,
+  type ReactNode,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -24,6 +25,7 @@ import type {
   BoardSnapshot,
   GuessResult,
   MatchSummary,
+  PlayerSummary,
   RoomSnapshot,
   SeatReservation,
   TicketBundle,
@@ -109,18 +111,6 @@ function getPhaseBadgeValue(phase: MatchPhase) {
     default:
       return "Hors partie";
   }
-}
-
-function getModeLabel(modifier?: string | null) {
-  if (!modifier || modifier === "standard") {
-    return "Standard";
-  }
-
-  return modifier
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(" ");
 }
 
 function getPlayerStatusLabel(status: string) {
@@ -226,6 +216,74 @@ function toLegacySeatReservation(
   };
 }
 
+type FullscreenDocument = Document & {
+  webkitExitFullscreen?: () => Promise<void> | void;
+  webkitFullscreenElement?: Element | null;
+  webkitFullscreenEnabled?: boolean;
+};
+
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
+
+function getFullscreenDocument() {
+  return document as FullscreenDocument;
+}
+
+function getCurrentFullscreenElement() {
+  const fullscreenDocument = getFullscreenDocument();
+  return (
+    fullscreenDocument.fullscreenElement ??
+    fullscreenDocument.webkitFullscreenElement ??
+    null
+  );
+}
+
+function supportsNativeFullscreen(element: HTMLElement | null) {
+  if (!element) {
+    return false;
+  }
+
+  const fullscreenDocument = getFullscreenDocument();
+  const fullscreenElement = element as FullscreenElement;
+
+  return Boolean(
+    (fullscreenDocument.fullscreenEnabled ||
+      fullscreenDocument.webkitFullscreenEnabled) &&
+    (fullscreenElement.requestFullscreen ||
+      fullscreenElement.webkitRequestFullscreen),
+  );
+}
+
+async function requestNativeFullscreen(element: HTMLElement) {
+  const fullscreenElement = element as FullscreenElement;
+
+  if (fullscreenElement.requestFullscreen) {
+    await fullscreenElement.requestFullscreen({ navigationUI: "hide" });
+    return;
+  }
+
+  if (fullscreenElement.webkitRequestFullscreen) {
+    await fullscreenElement.webkitRequestFullscreen();
+    return;
+  }
+
+  throw new Error("Native fullscreen unavailable.");
+}
+
+async function exitNativeFullscreen() {
+  const fullscreenDocument = getFullscreenDocument();
+
+  if (document.exitFullscreen) {
+    await document.exitFullscreen();
+    return;
+  }
+
+  if (fullscreenDocument.webkitExitFullscreen) {
+    await fullscreenDocument.webkitExitFullscreen();
+  }
+}
+
 export function PlayShell() {
   const { data: session, isPending, refetch } = authClient.useSession();
   const [isBusy, startTransition] = useTransition();
@@ -268,15 +326,14 @@ export function PlayShell() {
   const sessionUser = session?.user as
     | { id: string; name: string; email: string; isAnonymous?: boolean }
     | undefined;
+  const roomPhase = deferredSnapshot?.phase ?? null;
+  const roomPlayers = deferredSnapshot?.players ?? roomSnapshot?.players ?? [];
   const localPlayer = useMemo(
     () =>
-      deferredSnapshot?.players.find(
-        (player) => player.userId === sessionUser?.id,
-      ) ?? null,
-    [deferredSnapshot, sessionUser?.id],
+      roomPlayers.find((player) => player.userId === sessionUser?.id) ?? null,
+    [roomPlayers, sessionUser?.id],
   );
   const isInRoom = Boolean(roomSnapshot);
-  const roomPhase = deferredSnapshot?.phase ?? null;
   const timeValue =
     roomPhase === "round"
       ? formatRemaining(deferredSnapshot?.roundEndsAt, now)
@@ -312,7 +369,18 @@ export function PlayShell() {
     : 0;
   const finalistsCount = deferredSnapshot?.finalistsCount ?? 0;
   const activePlayerCount =
-    deferredSnapshot?.activePlayerCount ?? roomSnapshot?.players.length ?? 0;
+    deferredSnapshot?.activePlayerCount ?? roomPlayers.length;
+  const roomPlayerCount = roomPlayers.length;
+  const connectedPlayerCount = roomPlayers.filter(
+    (player) => player.connected,
+  ).length;
+  const readyPlayerCount = roomPlayers.filter(
+    (player) => player.status === "ready",
+  ).length;
+  const isPreRoundPhase =
+    roomPhase === "queue" || roomPhase === "lobby" || roomPhase === "countdown";
+  const showWaitingRoster = isPreRoundPhase;
+  const showSidebarLeaderboard = Boolean(roomSnapshot) && !showWaitingRoster;
   const localStatus = localPlayer?.status ?? null;
   const localStatusLabel = localStatus
     ? getPlayerStatusLabel(localStatus)
@@ -360,7 +428,6 @@ export function PlayShell() {
     localPlayer?.status === "playing",
   );
   const phaseBadgeValue = getPhaseBadgeValue(roomPhase);
-  const modeLabel = getModeLabel(roomSnapshot?.modifier);
   const fullscreenActive = isFullscreen || isPseudoFullscreen;
   const shortTouchViewport =
     prefersTouchInput && viewportHeight > 0 && viewportHeight <= 760;
@@ -405,13 +472,17 @@ export function PlayShell() {
     (fullscreenActive ||
       compactDesktopRound ||
       (viewportHeight > 0 && viewportHeight <= 920));
+  const desktopKeyboardExpandsPage =
+    desktopVisualKeyboardOpen && !fullscreenActive;
   const compactDockLayout = compactTouchRound || compactDesktopKeyboard;
   const denseDesktopBoard =
     isLiveRound &&
     !prefersTouchInput &&
-    (compactDesktopRound || compactDesktopKeyboard);
+    (compactDesktopRound || (compactDesktopKeyboard && fullscreenActive));
   const compactLiveRound =
-    compactTouchRound || compactDesktopRound || compactDesktopKeyboard;
+    compactTouchRound ||
+    compactDesktopRound ||
+    (compactDesktopKeyboard && fullscreenActive);
   const canToggleFullscreen = isFullscreenSupported || prefersTouchInput;
   const nativeKeyboardInset = prefersTouchInput ? viewportInsetBottom : 0;
   const nativeKeyboardActive =
@@ -427,6 +498,10 @@ export function PlayShell() {
   const hideCompactTouchHeader =
     compactTouchRound && (nativeKeyboardActive || compactTouchKeyboardVisible);
   const roomCodeLabel = roomSnapshot?.roomCode ?? "Public";
+  const roomStatusLabel =
+    roomSnapshot?.roomKind === "private" && roomPhase !== "queue"
+      ? `${readyPlayerCount}/${roomPlayerCount || 1} prêts`
+      : `${connectedPlayerCount || roomPlayerCount} connectés`;
   const matchInfoTitle =
     roomPhase === "results"
       ? "Match terminé"
@@ -470,13 +545,7 @@ export function PlayShell() {
     roomPhase === "queue" || roomPhase === "lobby"
       ? [
           { label: "Salon", value: roomCodeLabel },
-          {
-            label: "Joueurs",
-            value:
-              deferredSnapshot?.players.length ??
-              roomSnapshot?.players.length ??
-              0,
-          },
+          { label: "Joueurs", value: roomPlayerCount },
           { label: "Statut", value: localStatusLabel },
         ]
       : [
@@ -505,7 +574,9 @@ export function PlayShell() {
           ? "min(100%, 17rem)"
           : "min(100%, 18rem)"
       : compactDesktopKeyboard
-        ? "max(16rem, min(18.5rem, calc(100dvh - 27rem)))"
+        ? fullscreenActive
+          ? "max(16rem, min(18.5rem, calc(100dvh - 27rem)))"
+          : "min(100%, 27rem)"
         : compactDesktopRound
           ? "max(17rem, min(20rem, calc(100dvh - 23rem)))"
           : "max(20rem, min(27rem, calc(100dvh - 24rem)))"
@@ -526,7 +597,9 @@ export function PlayShell() {
             : "min(100%, 20rem)"
         : "min(100%, 18.5rem)"
       : compactDesktopKeyboard
-        ? "min(100%, 24rem)"
+        ? fullscreenActive
+          ? "min(100%, 24rem)"
+          : "min(100%, 31rem)"
         : compactDesktopRound
           ? "max(18rem, min(24rem, calc(100dvh - 19rem)))"
           : "max(22rem, min(31rem, calc(100dvh - 21rem)))"
@@ -536,7 +609,9 @@ export function PlayShell() {
     : compactTouchRound
       ? "min(100%, 18.5rem)"
       : compactDesktopKeyboard
-        ? "min(100%, 24rem)"
+        ? fullscreenActive
+          ? "min(100%, 24rem)"
+          : "min(100%, 31rem)"
         : "34rem";
   const mobilePinnedDockSpacing = mobilePinnedDock
     ? liveDockHeight + dockKeyboardInset + 12
@@ -643,29 +718,45 @@ export function PlayShell() {
   }, [mobilePinnedDock]);
 
   useEffect(() => {
-    const canFullscreen = Boolean(
-      document.fullscreenEnabled && playSurfaceRef.current?.requestFullscreen,
-    );
-    setIsFullscreenSupported(canFullscreen);
+    const syncFullscreenSupport = () => {
+      setIsFullscreenSupported(
+        supportsNativeFullscreen(playSurfaceRef.current),
+      );
+    };
 
     const handleFullscreenChange = () => {
-      setIsFullscreen(
-        Boolean(
-          playSurfaceRef.current &&
-          document.fullscreenElement === playSurfaceRef.current,
-        ),
+      const fullscreenElement = getCurrentFullscreenElement();
+      const nextFullscreen = Boolean(
+        playSurfaceRef.current && fullscreenElement === playSurfaceRef.current,
       );
+
+      if (nextFullscreen) {
+        setIsPseudoFullscreen(false);
+      }
+
+      setIsFullscreen(nextFullscreen);
     };
 
     const handleFullscreenError = () => {
       setStatusMessage("Le plein écran n’est pas disponible sur cet appareil.");
     };
 
+    syncFullscreenSupport();
+    window.addEventListener("resize", syncFullscreenSupport);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener(
+      "webkitfullscreenchange",
+      handleFullscreenChange as EventListener,
+    );
     document.addEventListener("fullscreenerror", handleFullscreenError);
 
     return () => {
+      window.removeEventListener("resize", syncFullscreenSupport);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        handleFullscreenChange as EventListener,
+      );
       document.removeEventListener("fullscreenerror", handleFullscreenError);
     };
   }, []);
@@ -839,28 +930,43 @@ export function PlayShell() {
   }, [fullscreenActive, isInputFocused, prefersTouchInput, showTouchKeyboard]);
 
   async function toggleFullscreen() {
-    if (!playSurfaceRef.current) {
+    const playSurface = playSurfaceRef.current;
+
+    if (!playSurface) {
       return;
     }
 
-    if (
-      !document.fullscreenEnabled ||
-      !playSurfaceRef.current.requestFullscreen ||
-      prefersTouchInput
-    ) {
-      setIsPseudoFullscreen((current) => !current);
-      return;
-    }
+    const nativeFullscreenSupported = supportsNativeFullscreen(playSurface);
 
     try {
-      if (document.fullscreenElement === playSurfaceRef.current) {
-        await document.exitFullscreen();
-      } else {
-        await playSurfaceRef.current.requestFullscreen();
+      if (isFullscreen) {
+        await exitNativeFullscreen();
+        return;
+      }
+
+      if (isPseudoFullscreen) {
+        setIsPseudoFullscreen(false);
+        return;
+      }
+
+      if (nativeFullscreenSupported) {
+        await requestNativeFullscreen(playSurface);
+        return;
       }
     } catch {
+      if (prefersTouchInput) {
+        setIsPseudoFullscreen(true);
+        setStatusMessage(
+          "Plein écran natif refusé, bascule sur le mode immersif local.",
+        );
+        return;
+      }
+
       setStatusMessage("Impossible de basculer en plein écran.");
+      return;
     }
+
+    setIsPseudoFullscreen((current) => !current);
   }
 
   async function connectToRoom(
@@ -1365,8 +1471,10 @@ export function PlayShell() {
     <div
       ref={playSurfaceRef}
       className={clsx(
-        "flex min-h-0 flex-1 flex-col",
-        isLiveRound && "h-full overflow-hidden",
+        desktopKeyboardExpandsPage
+          ? "flex w-full flex-col"
+          : "flex min-h-0 flex-1 flex-col",
+        isLiveRound && !desktopKeyboardExpandsPage && "h-full overflow-hidden",
         fullscreenActive &&
           "fixed inset-x-0 top-0 z-[80] w-screen overflow-hidden bg-[#040811]",
       )}
@@ -1374,7 +1482,9 @@ export function PlayShell() {
     >
       <GlassPanel
         className={clsx(
-          "flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-5 md:p-6",
+          desktopKeyboardExpandsPage
+            ? "flex flex-col overflow-visible p-4 sm:p-5 md:p-6"
+            : "flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-5 md:p-6",
           compactTouchRound && "p-2.5",
           fullscreenActive &&
             "rounded-none border-0 bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(3,7,16,1))] px-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-[calc(env(safe-area-inset-top)+0.5rem)] shadow-none sm:p-4",
@@ -1382,16 +1492,20 @@ export function PlayShell() {
       >
         <div
           className={clsx(
-            "flex-1 grid min-h-0 items-stretch gap-6 lg:gap-8",
+            desktopKeyboardExpandsPage
+              ? "grid items-stretch gap-6 lg:gap-8"
+              : "flex-1 grid min-h-0 items-stretch gap-6 lg:gap-8",
             compactTouchRound && "gap-2.5",
             isInRoom ? "grid-cols-1" : "lg:grid-cols-[1.15fr_0.85fr]",
           )}
         >
           <div
             className={clsx(
-              "min-w-0 flex min-h-0 flex-col gap-6",
+              desktopKeyboardExpandsPage
+                ? "min-w-0 flex flex-col gap-6"
+                : "min-w-0 flex min-h-0 flex-col gap-6",
               compactTouchRound && "gap-2.5",
-              isLiveRound && "overflow-hidden",
+              isLiveRound && !desktopKeyboardExpandsPage && "overflow-hidden",
             )}
           >
             {!isInRoom ? (
@@ -1729,7 +1843,7 @@ export function PlayShell() {
                   className={clsx(
                     "min-w-0",
                     isLiveRound
-                      ? `flex min-h-0 flex-col overflow-hidden ${compactLiveRound ? "gap-3" : "gap-4"}`
+                      ? `flex min-h-0 flex-col ${desktopKeyboardExpandsPage ? "overflow-visible" : "overflow-hidden"} ${compactLiveRound ? "gap-3" : "gap-4"}`
                       : "space-y-5",
                   )}
                 >
@@ -1740,31 +1854,50 @@ export function PlayShell() {
                       compactDesktopRound && "gap-1.5",
                     )}
                   >
-                    {!compactLiveRound ? (
+                    {!compactLiveRound && !isPreRoundPhase ? (
                       <MetricBadge
                         label="Phase"
                         value={phaseBadgeValue}
                         compact={compactMetricStrip}
                       />
                     ) : null}
-                    <MetricBadge
-                      label="Temps"
-                      value={timeValue}
-                      tone={roomPhase === "round" ? "danger" : "default"}
-                      compact={compactMetricStrip}
-                    />
-                    {!compactLiveRound && !lockedSidebarToDesktop ? (
+                    {roomPhase === "round" || roomPhase === "countdown" ? (
+                      <MetricBadge
+                        label="Temps"
+                        value={timeValue}
+                        tone={roomPhase === "round" ? "danger" : "default"}
+                        compact={compactMetricStrip}
+                      />
+                    ) : null}
+                    {!compactLiveRound &&
+                    !lockedSidebarToDesktop &&
+                    isInRoom ? (
                       <MetricBadge
                         label="Salon"
                         value={roomSnapshot.roomCode ?? "Public"}
                         compact={compactMetricStrip}
                       />
                     ) : null}
-                    {!compactLiveRound && !lockedSidebarToDesktop ? (
+                    {!isLiveRound && isInRoom ? (
                       <MetricBadge
-                        label="Mode"
-                        value={modeLabel}
-                        tone="good"
+                        label={
+                          roomSnapshot.roomKind === "private" &&
+                          roomPhase !== "queue"
+                            ? "Prêts"
+                            : "Joueurs"
+                        }
+                        value={
+                          roomSnapshot.roomKind === "private" &&
+                          roomPhase !== "queue"
+                            ? `${readyPlayerCount}/${roomPlayerCount}`
+                            : roomPlayerCount
+                        }
+                        tone={
+                          roomSnapshot.roomKind === "private" &&
+                          readyPlayerCount >= Math.max(2, roomPlayerCount)
+                            ? "good"
+                            : "default"
+                        }
                         compact={compactMetricStrip}
                       />
                     ) : null}
@@ -1820,7 +1953,10 @@ export function PlayShell() {
                         : compactLiveRound
                           ? "p-3"
                           : "p-4 sm:p-5",
-                      isLiveRound && "flex h-full flex-col overflow-hidden",
+                      isLiveRound &&
+                        (desktopKeyboardExpandsPage
+                          ? "flex flex-col"
+                          : "flex h-full flex-col overflow-hidden"),
                     )}
                   >
                     <div
@@ -1877,26 +2013,40 @@ export function PlayShell() {
                             {statusMessage}
                           </p>
                         ) : null}
-                      </div>
-
-                      {!isLiveRound ? (
-                        <div className="grid gap-2 sm:min-w-40">
-                          <div className="rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-3 text-right">
-                            <p className="eyebrow">Score</p>
-                            <p className="number-tabular text-3xl font-semibold text-white">
-                              {localPlayer?.score ?? 0}
-                            </p>
+                        {!isLiveRound && isInRoom ? (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <InlineMetaPill
+                              label="Salon"
+                              value={roomCodeLabel}
+                            />
+                            <InlineMetaPill
+                              label="Joueurs"
+                              value={String(roomPlayerCount)}
+                            />
+                            <InlineMetaPill
+                              label={
+                                roomSnapshot.roomKind === "private"
+                                  ? "Prêts"
+                                  : "Connectés"
+                              }
+                              value={roomStatusLabel}
+                              tone={
+                                roomSnapshot.roomKind === "private" &&
+                                readyPlayerCount >= Math.max(2, roomPlayerCount)
+                                  ? "good"
+                                  : "default"
+                              }
+                            />
+                            {showRoundReveal && revealWord ? (
+                              <InlineMetaPill
+                                label="Réponse"
+                                value={revealWord}
+                                tone="danger"
+                              />
+                            ) : null}
                           </div>
-                          {liveBoardSnapshot ? (
-                            <div className="rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-3 text-right">
-                              <p className="eyebrow">Essais restants</p>
-                              <p className="number-tabular text-2xl font-semibold text-white">
-                                {liveBoardSnapshot.attemptsRemaining}
-                              </p>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
+                        ) : null}
+                      </div>
                     </div>
 
                     {showRoundReveal ? (
@@ -1959,7 +2109,10 @@ export function PlayShell() {
 
                     <div
                       className={clsx(
-                        isLiveRound && "min-h-0 flex-1",
+                        isLiveRound &&
+                          (desktopKeyboardExpandsPage
+                            ? "pt-1"
+                            : "min-h-0 flex-1"),
                         compactTouchRound &&
                           (nativeKeyboardActive || compactTouchKeyboardVisible
                             ? "flex items-start justify-center overflow-y-auto overscroll-contain pt-1 pb-2"
@@ -2048,7 +2201,9 @@ export function PlayShell() {
                             ? "pointer-events-none absolute inset-x-2"
                             : prefersTouchInput
                               ? "sticky bottom-0 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
-                              : "mt-auto pt-2",
+                              : desktopKeyboardExpandsPage
+                                ? "mt-4"
+                                : "mt-auto pt-2",
                         )}
                         style={{
                           maxWidth: liveDockMaxWidth,
@@ -2366,32 +2521,10 @@ export function PlayShell() {
                     "grid min-w-0 gap-5",
                     compactTouchRound && "hidden",
                     lockedSidebarToDesktop
-                      ? "hidden lg:grid lg:self-start lg:sticky lg:top-4 lg:grid-cols-1 lg:gap-4"
-                      : "lg:grid-cols-2 xl:sticky xl:top-6 xl:grid-cols-1",
+                      ? "hidden lg:grid lg:self-start lg:sticky lg:top-4 lg:max-h-[calc(100dvh-5.5rem)] lg:grid-cols-1 lg:gap-4 lg:overflow-y-auto lg:pr-1"
+                      : "lg:grid-cols-2 xl:self-start xl:sticky xl:top-6 xl:max-h-[calc(100dvh-9rem)] xl:grid-cols-1 xl:overflow-y-auto xl:pr-1",
                   )}
                 >
-                  <div
-                    className={clsx(
-                      "hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block",
-                      isLiveRound && "xl:hidden",
-                    )}
-                  >
-                    <p className="eyebrow">Session</p>
-                    <h3 className="mt-3 break-words font-display text-2xl text-white sm:text-3xl">
-                      {sessionUser?.name}
-                    </h3>
-                    <p className="mt-2 break-all text-sm text-slate-300">
-                      {sessionUser?.email}
-                    </p>
-                    <div className="mt-5 flex flex-wrap gap-2 sm:gap-3">
-                      <MetricBadge
-                        label="Type"
-                        value={sessionUser?.isAnonymous ? "Invité" : "Compte"}
-                      />
-                      <MetricBadge label="Salon" value="Connecté" tone="good" />
-                    </div>
-                  </div>
-
                   {isLiveRound ? (
                     <div
                       className={clsx(
@@ -2430,208 +2563,150 @@ export function PlayShell() {
                         )}
                       </div>
                     </div>
-                  ) : (
-                    <div className="hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block">
-                      <p className="eyebrow">Repères</p>
-                      <div className="mt-4 space-y-3">
-                        {feedbackLegend.map((item) => (
-                          <div
-                            key={item.key}
-                            className="flex items-start gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3"
-                          >
-                            <div className="w-11 shrink-0">
-                              <WordTile
-                                letter={item.letter}
-                                state={item.state}
-                                hint={item.hint}
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <FeedbackToneIcon
-                                  tone={item.tone}
-                                  className="h-3.5 w-3.5 text-slate-200"
-                                />
-                                <p className="text-sm font-medium text-white">
-                                  {item.title}
-                                </p>
-                              </div>
-                              <p className="mt-1 text-xs leading-5 text-slate-400">
-                                {item.body}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  ) : null}
 
-                  <div
-                    className={clsx(
-                      "rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5",
-                      lockedSidebarToDesktop &&
-                        "flex max-h-[calc(100dvh-15rem)] flex-col overflow-hidden",
-                    )}
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="eyebrow">Classement</p>
-                        <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">
-                          {lockedSidebarToDesktop
+                  {showWaitingRoster ? (
+                    <PlayerListPanel
+                      eyebrow={
+                        roomSnapshot.roomKind === "private"
+                          ? "Salon"
+                          : "Matchmaking"
+                      }
+                      title={
+                        roomPhase === "countdown"
+                          ? "Joueurs prêts"
+                          : roomSnapshot.roomKind === "private"
+                            ? "Joueurs présents"
+                            : "Joueurs en file"
+                      }
+                      metricLabel={
+                        roomSnapshot.roomKind === "private" &&
+                        roomPhase !== "queue"
+                          ? "Prêts"
+                          : "Connectés"
+                      }
+                      metricValue={
+                        roomSnapshot.roomKind === "private" &&
+                        roomPhase !== "queue"
+                          ? `${readyPlayerCount}/${roomPlayerCount}`
+                          : connectedPlayerCount
+                      }
+                      players={roomPlayers}
+                      currentUserId={sessionUser?.id}
+                      hostUserId={roomSnapshot.hostUserId}
+                      variant="waiting"
+                    />
+                  ) : showSidebarLeaderboard ? (
+                    <PlayerListPanel
+                      eyebrow="Classement"
+                      title={
+                        roomPhase === "results"
+                          ? "Classement final"
+                          : lockedSidebarToDesktop
                             ? "Positions"
-                            : "Classement live"}
-                        </h3>
-                      </div>
-                      <MetricBadge
-                        label="Joueurs"
-                        value={
-                          deferredSnapshot?.players.length ??
-                          roomSnapshot.players.length
-                        }
-                        compact={lockedSidebarToDesktop}
-                      />
-                    </div>
+                            : "Classement live"
+                      }
+                      metricLabel="Joueurs"
+                      metricValue={roomPlayerCount}
+                      players={roomPlayers}
+                      currentUserId={sessionUser?.id}
+                      hostUserId={roomSnapshot.hostUserId}
+                      variant="leaderboard"
+                      compactMetric={lockedSidebarToDesktop}
+                    />
+                  ) : null}
 
-                    <div
-                      className={clsx(
-                        "mt-5 space-y-3",
-                        lockedSidebarToDesktop && "flex-1 overflow-y-auto pr-1",
-                      )}
-                    >
-                      {(deferredSnapshot?.players ?? roomSnapshot.players).map(
-                        (player, index) => (
-                          <div
-                            key={player.userId}
-                            className={clsx(
-                              "rounded-[22px] border px-4 py-3 transition",
-                              lockedSidebarToDesktop && "px-3 py-2.5",
-                              player.userId === sessionUser?.id
-                                ? "border-cyan-300/35 bg-cyan-300/10"
-                                : "border-white/8 bg-white/[0.03]",
-                            )}
-                          >
-                            <div
-                              className={clsx(
-                                "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
-                                lockedSidebarToDesktop && "gap-2",
-                              )}
-                            >
-                              <div className="min-w-0 flex items-center gap-3">
-                                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-950/80 text-sm text-white">
-                                  #{index + 1}
-                                </span>
-                                <div className="min-w-0">
-                                  <p className="break-words font-medium text-white">
-                                    {player.name}
-                                  </p>
-                                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-                                    {getPlayerStatusLabel(player.status)}
-                                  </p>
-                                </div>
-                              </div>
-                              <span className="number-tabular text-sm text-slate-200">
-                                {player.score} pts
-                              </span>
-                            </div>
-                          </div>
-                        ),
-                      )}
-                    </div>
-                  </div>
-
-                  <div
-                    className={clsx(
-                      "rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5",
-                      isLiveRound && "hidden",
-                    )}
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="eyebrow">État du match</p>
-                        <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">
-                          {matchInfoTitle}
-                        </h3>
-                      </div>
-                      <MetricBadge label="Statut" value={localStatusLabel} />
-                    </div>
-                    <p
-                      className="mt-4 text-sm leading-6 text-slate-200"
-                      aria-live="polite"
-                    >
-                      {matchInfoBody}
-                    </p>
-
-                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                      {matchInfoStats.map((item) => (
-                        <div
-                          key={item.label}
-                          className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3"
-                        >
-                          <p className="eyebrow">{item.label}</p>
-                          <p className="mt-2 text-lg font-medium text-white">
-                            {item.value}
-                          </p>
+                  {roomPhase === "results" ? (
+                    <div className="rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="eyebrow">État du match</p>
+                          <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">
+                            {matchInfoTitle}
+                          </h3>
                         </div>
-                      ))}
-                    </div>
-
-                    {showSystemStatusNote ? (
-                      <div className="mt-5 rounded-[20px] border border-white/8 bg-slate-950/40 px-4 py-3">
-                        <p className="eyebrow">Retour système</p>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">
-                          {statusMessage}
-                        </p>
+                        <MetricBadge label="Statut" value={localStatusLabel} />
                       </div>
-                    ) : null}
+                      <p
+                        className="mt-4 text-sm leading-6 text-slate-200"
+                        aria-live="polite"
+                      >
+                        {matchInfoBody}
+                      </p>
 
-                    {matchSummary && (
-                      <div className="mt-5 space-y-3">
-                        <p className="eyebrow">Podium</p>
-                        {matchSummary.players.slice(0, 3).map((player) => (
+                      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                        {matchInfoStats.map((item) => (
                           <div
-                            key={player.userId}
+                            key={item.label}
                             className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3"
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-white">
-                                #{player.placement} {player.name}
-                              </span>
-                              <span className="number-tabular text-sm text-slate-200">
-                                {player.score}
-                              </span>
-                            </div>
+                            <p className="eyebrow">{item.label}</p>
+                            <p className="mt-2 text-lg font-medium text-white">
+                              {item.value}
+                            </p>
                           </div>
                         ))}
-
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <button
-                            className="button-primary w-full"
-                            type="button"
-                            onClick={() =>
-                              void connectToRoom("/api/game/public-ticket", {
-                                action: "public",
-                                pendingMessage: "Recherche d’un match public…",
-                              })
-                            }
-                          >
-                            Relancer en public
-                          </button>
-                          <button
-                            className="button-secondary w-full"
-                            type="button"
-                            onClick={() =>
-                              void connectToRoom("/api/game/private-ticket", {
-                                action: "private",
-                                pendingMessage: "Création du salon privé…",
-                              })
-                            }
-                          >
-                            Nouveau salon privé
-                          </button>
-                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      {showSystemStatusNote ? (
+                        <div className="mt-5 rounded-[20px] border border-white/8 bg-slate-950/40 px-4 py-3">
+                          <p className="eyebrow">Retour système</p>
+                          <p className="mt-2 text-sm leading-6 text-slate-300">
+                            {statusMessage}
+                          </p>
+                        </div>
+                      ) : null}
+
+                      {matchSummary ? (
+                        <div className="mt-5 space-y-3">
+                          <p className="eyebrow">Podium</p>
+                          {matchSummary.players.slice(0, 3).map((player) => (
+                            <div
+                              key={player.userId}
+                              className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-medium text-white">
+                                  #{player.placement} {player.name}
+                                </span>
+                                <span className="number-tabular text-sm text-slate-200">
+                                  {player.score}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <button
+                              className="button-primary w-full"
+                              type="button"
+                              onClick={() =>
+                                void connectToRoom("/api/game/public-ticket", {
+                                  action: "public",
+                                  pendingMessage:
+                                    "Recherche d’un match public…",
+                                })
+                              }
+                            >
+                              Relancer en public
+                            </button>
+                            <button
+                              className="button-secondary w-full"
+                              type="button"
+                              onClick={() =>
+                                void connectToRoom("/api/game/private-ticket", {
+                                  action: "private",
+                                  pendingMessage: "Création du salon privé…",
+                                })
+                              }
+                            >
+                              Nouveau salon privé
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             )}
@@ -2689,4 +2764,217 @@ export function PlayShell() {
       </GlassPanel>
     </div>
   );
+}
+
+function InlineMetaPill(props: {
+  readonly label: string;
+  readonly value: string;
+  readonly tone?: "default" | "good" | "danger";
+}) {
+  return (
+    <span
+      className={clsx(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium text-slate-100",
+        props.tone === "good" &&
+          "border-lime-300/30 bg-lime-300/10 text-lime-50",
+        props.tone === "danger" &&
+          "border-amber-300/30 bg-amber-300/10 text-amber-50",
+        (!props.tone || props.tone === "default") &&
+          "border-white/10 bg-white/[0.04]",
+      )}
+    >
+      <span className="uppercase tracking-[0.18em] text-white/55">
+        {props.label}
+      </span>
+      <strong className="font-semibold text-white">{props.value}</strong>
+    </span>
+  );
+}
+
+function PlayerListPanel(props: {
+  readonly eyebrow: string;
+  readonly title: string;
+  readonly metricLabel: string;
+  readonly metricValue: ReactNode;
+  readonly players: readonly PlayerSummary[];
+  readonly currentUserId?: string;
+  readonly hostUserId?: string;
+  readonly variant: "waiting" | "leaderboard";
+  readonly compactMetric?: boolean;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="eyebrow">{props.eyebrow}</p>
+          <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">
+            {props.title}
+          </h3>
+        </div>
+        <MetricBadge
+          label={props.metricLabel}
+          value={props.metricValue}
+          compact={props.compactMetric}
+          tone={props.variant === "waiting" ? "good" : "default"}
+        />
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {props.players.length ? (
+          props.players.map((player, index) =>
+            props.variant === "waiting" ? (
+              <WaitingPlayerCard
+                key={player.userId}
+                player={player}
+                isCurrentUser={player.userId === props.currentUserId}
+                isHost={player.userId === props.hostUserId}
+              />
+            ) : (
+              <LeaderboardPlayerCard
+                key={player.userId}
+                player={player}
+                placement={index + 1}
+                isCurrentUser={player.userId === props.currentUserId}
+              />
+            ),
+          )
+        ) : (
+          <p className="text-sm leading-6 text-slate-400">
+            Aucun joueur affiché pour l’instant.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WaitingPlayerCard(props: {
+  readonly player: PlayerSummary;
+  readonly isCurrentUser: boolean;
+  readonly isHost: boolean;
+}) {
+  const statusTone = getWaitingStatusTone(props.player);
+
+  return (
+    <div
+      className={clsx(
+        "rounded-[22px] border px-4 py-3 transition",
+        props.isCurrentUser
+          ? "border-cyan-300/35 bg-cyan-300/10"
+          : "border-white/8 bg-white/[0.03]",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className={clsx(
+                "mt-1 h-2.5 w-2.5 shrink-0 rounded-full",
+                statusTone === "good" &&
+                  "bg-lime-300 shadow-[0_0_14px_rgba(190,242,100,0.35)]",
+                statusTone === "danger" && "bg-slate-500",
+                statusTone === "default" &&
+                  "bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.35)]",
+              )}
+            />
+            <div className="min-w-0">
+              <p className="break-words font-medium text-white">
+                {props.player.name}
+              </p>
+              <p className="mt-1 text-xs uppercase tracking-[0.24em] text-slate-400">
+                {getPlayerStatusLabel(props.player.status)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {props.isCurrentUser ? (
+            <MiniStatusPill label="Toi" tone="default" />
+          ) : null}
+          {props.isHost ? <MiniStatusPill label="Hôte" tone="default" /> : null}
+          {!props.player.connected ? (
+            <MiniStatusPill label="Hors ligne" tone="danger" />
+          ) : props.player.status === "ready" ? (
+            <MiniStatusPill label="Prêt" tone="good" />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LeaderboardPlayerCard(props: {
+  readonly player: PlayerSummary;
+  readonly placement: number;
+  readonly isCurrentUser: boolean;
+}) {
+  return (
+    <div
+      className={clsx(
+        "rounded-[22px] border px-4 py-3 transition",
+        props.isCurrentUser
+          ? "border-cyan-300/35 bg-cyan-300/10"
+          : "border-white/8 bg-white/[0.03]",
+      )}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-950/80 text-sm text-white">
+            #{props.placement}
+          </span>
+          <div className="min-w-0">
+            <p className="break-words font-medium text-white">
+              {props.player.name}
+            </p>
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
+              {getPlayerStatusLabel(props.player.status)}
+            </p>
+          </div>
+        </div>
+        <span className="number-tabular text-sm text-slate-200">
+          {props.player.score} pts
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MiniStatusPill(props: {
+  readonly label: string;
+  readonly tone: "default" | "good" | "danger";
+}) {
+  return (
+    <span
+      className={clsx(
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]",
+        props.tone === "good" &&
+          "border-lime-300/30 bg-lime-300/10 text-lime-50",
+        props.tone === "danger" &&
+          "border-slate-400/20 bg-slate-400/10 text-slate-200",
+        props.tone === "default" &&
+          "border-cyan-300/25 bg-cyan-300/10 text-cyan-50",
+      )}
+    >
+      {props.label}
+    </span>
+  );
+}
+
+function getWaitingStatusTone(
+  player: PlayerSummary,
+): "default" | "good" | "danger" {
+  if (!player.connected || player.status === "left") {
+    return "danger";
+  }
+
+  if (
+    player.status === "ready" ||
+    player.status === "playing" ||
+    player.status === "solved"
+  ) {
+    return "good";
+  }
+
+  return "default";
 }
