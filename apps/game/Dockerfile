@@ -44,11 +44,13 @@ WORKDIR /app
 
 COPY --from=builder --chown=node:node /app /app
 
-# Verify the runtime tree before publishing the image.
-RUN node -e "process.chdir('/app/apps/game'); require.resolve('express')"
+WORKDIR /app/apps/game
+
+# Verify the runtime tree from the game package root.
+RUN node -e "console.log(require.resolve('express'))"
 
 EXPOSE 2567
 
 USER node
 
-CMD ["node", "/usr/local/bin/pnpm", "--filter", "@motus/game", "start"]
+CMD ["node", "--enable-source-maps", "dist/index.js"]
