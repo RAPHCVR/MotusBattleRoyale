@@ -1,11 +1,33 @@
 "use client";
 
-import { type FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  type FormEvent,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import clsx from "clsx";
 import { Client, type Room } from "colyseus.js";
 
-import { FeedbackToneIcon, GlassPanel, MetricBadge, SectionHeader, WordTile, type WordTileTone } from "@motus/ui";
-import type { BoardSnapshot, GuessResult, MatchSummary, RoomSnapshot, SeatReservation, TicketBundle } from "@motus/protocol";
+import {
+  FeedbackToneIcon,
+  GlassPanel,
+  MetricBadge,
+  SectionHeader,
+  WordTile,
+  type WordTileTone,
+} from "@motus/ui";
+import type {
+  BoardSnapshot,
+  GuessResult,
+  MatchSummary,
+  RoomSnapshot,
+  SeatReservation,
+  TicketBundle,
+} from "@motus/protocol";
 
 import { authClient } from "@/lib/auth-client";
 import {
@@ -17,7 +39,7 @@ import {
   getEditableSlotCount,
   getBlockedLetters,
   getKnownLetterLimits,
-  getLockedLetters
+  getLockedLetters,
 } from "@/components/play-shell-helpers";
 
 const keyboardRows = ["AZERTYUIOP", "QSDFGHJKLM", "WXCVBN"];
@@ -28,7 +50,7 @@ const feedbackLegend = [
     body: "Cyan. La lettre est déjà révélée et reste posée automatiquement.",
     letter: "A",
     hint: true,
-    tone: "hint" as const
+    tone: "hint" as const,
   },
   {
     key: "correct",
@@ -36,7 +58,7 @@ const feedbackLegend = [
     body: "Vert. Bonne lettre, bonne case.",
     letter: "A",
     state: "correct" as const,
-    tone: "correct" as const
+    tone: "correct" as const,
   },
   {
     key: "present",
@@ -44,7 +66,7 @@ const feedbackLegend = [
     body: "Ambre. Bonne lettre, mais mauvaise case.",
     letter: "A",
     state: "present" as const,
-    tone: "present" as const
+    tone: "present" as const,
   },
   {
     key: "absent",
@@ -52,8 +74,8 @@ const feedbackLegend = [
     body: "Ardoise. Lettre absente du mot quand l'état est confirmé.",
     letter: "A",
     state: "absent" as const,
-    tone: "absent" as const
-  }
+    tone: "absent" as const,
+  },
 ];
 
 type PendingAction =
@@ -154,7 +176,7 @@ function isOperationalStatusMessage(message: string) {
     "recherche",
     "préparation",
     "chargement",
-    "fermée"
+    "fermée",
   ].some((token) => lower.includes(token));
 }
 
@@ -173,7 +195,10 @@ function formatRemaining(target?: number | null, now = Date.now()) {
   return `${minutes}:${rest}`;
 }
 
-function toLegacySeatReservation(reservation: SeatReservation, wsEndpoint: string) {
+function toLegacySeatReservation(
+  reservation: SeatReservation,
+  wsEndpoint: string,
+) {
   if (!reservation.processId) {
     throw new Error("Ticket de room incomplet: processId manquant.");
   }
@@ -193,20 +218,24 @@ function toLegacySeatReservation(reservation: SeatReservation, wsEndpoint: strin
       name: reservation.name,
       roomId: reservation.roomId,
       processId: reservation.processId,
-      publicAddress
+      publicAddress,
     },
     reconnectionToken: reservation.reconnectionToken,
     devMode: reservation.devMode,
-    protocol: "ws"
+    protocol: "ws",
   };
 }
 
 export function PlayShell() {
   const { data: session, isPending, refetch } = authClient.useSession();
   const [isBusy, startTransition] = useTransition();
-  const [statusMessage, setStatusMessage] = useState<string>("Prêt pour la première partie.");
+  const [statusMessage, setStatusMessage] = useState<string>(
+    "Prêt pour la première partie.",
+  );
   const [roomSnapshot, setRoomSnapshot] = useState<RoomSnapshot | null>(null);
-  const [boardSnapshot, setBoardSnapshot] = useState<BoardSnapshot | null>(null);
+  const [boardSnapshot, setBoardSnapshot] = useState<BoardSnapshot | null>(
+    null,
+  );
   const [matchSummary, setMatchSummary] = useState<MatchSummary | null>(null);
   const [guess, setGuess] = useState("");
   const [privateCode, setPrivateCode] = useState("");
@@ -236,10 +265,15 @@ export function PlayShell() {
   const [liveDockHeight, setLiveDockHeight] = useState(0);
 
   const deferredSnapshot = useDeferredValue(roomSnapshot);
-  const sessionUser = session?.user as { id: string; name: string; email: string; isAnonymous?: boolean } | undefined;
+  const sessionUser = session?.user as
+    | { id: string; name: string; email: string; isAnonymous?: boolean }
+    | undefined;
   const localPlayer = useMemo(
-    () => deferredSnapshot?.players.find((player) => player.userId === sessionUser?.id) ?? null,
-    [deferredSnapshot, sessionUser?.id]
+    () =>
+      deferredSnapshot?.players.find(
+        (player) => player.userId === sessionUser?.id,
+      ) ?? null,
+    [deferredSnapshot, sessionUser?.id],
   );
   const isInRoom = Boolean(roomSnapshot);
   const roomPhase = deferredSnapshot?.phase ?? null;
@@ -248,23 +282,45 @@ export function PlayShell() {
       ? formatRemaining(deferredSnapshot?.roundEndsAt, now)
       : formatRemaining(deferredSnapshot?.countdownEndsAt, now);
   const boardIsStale = Boolean(
-    boardSnapshot && roomPhase === "round" && deferredSnapshot && boardSnapshot.roundIndex !== deferredSnapshot.currentRoundIndex
+    boardSnapshot &&
+    roomPhase === "round" &&
+    deferredSnapshot &&
+    boardSnapshot.roundIndex !== deferredSnapshot.currentRoundIndex,
   );
   const liveBoardSnapshot = boardIsStale ? null : boardSnapshot;
-  const keyboardStates = useMemo(() => buildKeyboardLetterStates(liveBoardSnapshot), [liveBoardSnapshot]);
-  const blockedLetters = useMemo(() => getBlockedLetters(liveBoardSnapshot), [liveBoardSnapshot]);
-  const knownLetterLimits = useMemo(() => getKnownLetterLimits(liveBoardSnapshot), [liveBoardSnapshot]);
-  const eliminatedLetters = useMemo(
-    () => Array.from(blockedLetters).sort((left, right) => left.localeCompare(right, "fr")),
-    [blockedLetters]
+  const keyboardStates = useMemo(
+    () => buildKeyboardLetterStates(liveBoardSnapshot),
+    [liveBoardSnapshot],
   );
-  const currentRoundNumber = deferredSnapshot ? deferredSnapshot.currentRoundIndex + 1 : 0;
+  const blockedLetters = useMemo(
+    () => getBlockedLetters(liveBoardSnapshot),
+    [liveBoardSnapshot],
+  );
+  const knownLetterLimits = useMemo(
+    () => getKnownLetterLimits(liveBoardSnapshot),
+    [liveBoardSnapshot],
+  );
+  const eliminatedLetters = useMemo(
+    () =>
+      Array.from(blockedLetters).sort((left, right) =>
+        left.localeCompare(right, "fr"),
+      ),
+    [blockedLetters],
+  );
+  const currentRoundNumber = deferredSnapshot
+    ? deferredSnapshot.currentRoundIndex + 1
+    : 0;
   const finalistsCount = deferredSnapshot?.finalistsCount ?? 0;
-  const activePlayerCount = deferredSnapshot?.activePlayerCount ?? roomSnapshot?.players.length ?? 0;
+  const activePlayerCount =
+    deferredSnapshot?.activePlayerCount ?? roomSnapshot?.players.length ?? 0;
   const localStatus = localPlayer?.status ?? null;
-  const localStatusLabel = localStatus ? getPlayerStatusLabel(localStatus) : "Hors partie";
+  const localStatusLabel = localStatus
+    ? getPlayerStatusLabel(localStatus)
+    : "Hors partie";
   const revealWord = liveBoardSnapshot?.solution;
-  const showRoundReveal = Boolean(liveBoardSnapshot?.roundResolved && revealWord);
+  const showRoundReveal = Boolean(
+    liveBoardSnapshot?.roundResolved && revealWord,
+  );
   const statusDrivenSubtitle =
     localStatus === "eliminated"
       ? getEliminationStatusCopy(currentRoundNumber, finalistsCount)
@@ -298,32 +354,78 @@ export function PlayShell() {
             : roomPhase === "queue"
               ? "Attends assez de joueurs ou crée un salon privé."
               : "Invite un autre joueur ou lance le salon quand tout le monde est prêt.");
-  const isLiveRound = Boolean(liveBoardSnapshot && roomPhase === "round" && localPlayer?.status === "playing");
+  const isLiveRound = Boolean(
+    liveBoardSnapshot &&
+    roomPhase === "round" &&
+    localPlayer?.status === "playing",
+  );
   const phaseBadgeValue = getPhaseBadgeValue(roomPhase);
   const modeLabel = getModeLabel(roomSnapshot?.modifier);
   const fullscreenActive = isFullscreen || isPseudoFullscreen;
-  const shortTouchViewport = prefersTouchInput && viewportHeight > 0 && viewportHeight <= 760;
-  const compactTouchRoomShell = prefersTouchInput && isInRoom && !isLiveRound && (fullscreenActive || (viewportHeight > 0 && viewportHeight <= 860));
-  const showCompactReveal = showRoundReveal && (fullscreenActive || prefersTouchInput || (viewportHeight > 0 && viewportHeight <= 880));
-  const showVirtualKeyboard = prefersTouchInput ? fullscreenActive && showTouchKeyboard : showDesktopKeyboard;
-  const isSubmittingSession = pendingAction === "guest" || pendingAction === "upgrade" || pendingAction === "signin" || pendingAction === "passkeySignIn";
-  const isConnectingToRoom = pendingAction === "public" || pendingAction === "private" || pendingAction === "privateJoin";
+  const shortTouchViewport =
+    prefersTouchInput && viewportHeight > 0 && viewportHeight <= 760;
+  const compactTouchRoomShell =
+    prefersTouchInput &&
+    isInRoom &&
+    !isLiveRound &&
+    (fullscreenActive || (viewportHeight > 0 && viewportHeight <= 860));
+  const showCompactReveal =
+    showRoundReveal &&
+    (fullscreenActive ||
+      prefersTouchInput ||
+      (viewportHeight > 0 && viewportHeight <= 880));
+  const showVirtualKeyboard = prefersTouchInput
+    ? fullscreenActive && showTouchKeyboard
+    : showDesktopKeyboard;
+  const isSubmittingSession =
+    pendingAction === "guest" ||
+    pendingAction === "upgrade" ||
+    pendingAction === "signin" ||
+    pendingAction === "passkeySignIn";
+  const isConnectingToRoom =
+    pendingAction === "public" ||
+    pendingAction === "private" ||
+    pendingAction === "privateJoin";
   const publicTicketPending = pendingAction === "public";
   const privateTicketPending = pendingAction === "private";
   const privateJoinPending = pendingAction === "privateJoin";
   const lockedSidebarToDesktop = isLiveRound && !prefersTouchInput;
   const compactTouchRound = isLiveRound && prefersTouchInput;
-  const compactTouchKeyboardVisible = compactTouchRound && fullscreenActive && showTouchKeyboard;
-  const compactDesktopRound = isLiveRound && !prefersTouchInput && viewportHeight > 0 && viewportHeight <= 860;
-  const desktopVisualKeyboardOpen = isLiveRound && !prefersTouchInput && showVirtualKeyboard;
-  const compactDesktopKeyboard = desktopVisualKeyboardOpen && (fullscreenActive || compactDesktopRound || (viewportHeight > 0 && viewportHeight <= 920));
+  const compactTouchKeyboardVisible =
+    compactTouchRound && fullscreenActive && showTouchKeyboard;
+  const compactDesktopRound =
+    isLiveRound &&
+    !prefersTouchInput &&
+    viewportHeight > 0 &&
+    viewportHeight <= 860;
+  const desktopVisualKeyboardOpen =
+    isLiveRound && !prefersTouchInput && showVirtualKeyboard;
+  const compactDesktopKeyboard =
+    desktopVisualKeyboardOpen &&
+    (fullscreenActive ||
+      compactDesktopRound ||
+      (viewportHeight > 0 && viewportHeight <= 920));
   const compactDockLayout = compactTouchRound || compactDesktopKeyboard;
-  const denseDesktopBoard = isLiveRound && !prefersTouchInput && (compactDesktopRound || compactDesktopKeyboard);
-  const compactLiveRound = compactTouchRound || compactDesktopRound || compactDesktopKeyboard;
+  const denseDesktopBoard =
+    isLiveRound &&
+    !prefersTouchInput &&
+    (compactDesktopRound || compactDesktopKeyboard);
+  const compactLiveRound =
+    compactTouchRound || compactDesktopRound || compactDesktopKeyboard;
   const canToggleFullscreen = isFullscreenSupported || prefersTouchInput;
   const nativeKeyboardInset = prefersTouchInput ? viewportInsetBottom : 0;
-  const nativeKeyboardActive = isLiveRound && prefersTouchInput && isInputFocused && !showTouchKeyboard && nativeKeyboardInset > 0;
+  const nativeKeyboardActive =
+    isLiveRound &&
+    prefersTouchInput &&
+    isInputFocused &&
+    !showTouchKeyboard &&
+    nativeKeyboardInset > 0;
+  const dockKeyboardInset = fullscreenActive ? 0 : nativeKeyboardInset;
   const mobilePinnedDock = isLiveRound && prefersTouchInput;
+  const compactMetricStrip =
+    prefersTouchInput || compactLiveRound || lockedSidebarToDesktop;
+  const hideCompactTouchHeader =
+    compactTouchRound && (nativeKeyboardActive || compactTouchKeyboardVisible);
   const roomCodeLabel = roomSnapshot?.roomCode ?? "Public";
   const matchInfoTitle =
     roomPhase === "results"
@@ -343,77 +445,115 @@ export function PlayShell() {
                   : roomPhase === "round"
                     ? `Manche ${currentRoundNumber}`
                     : "Partie";
-  const matchInfoBody =
-    matchSummary
-      ? "Le podium est figé. Tu peux repartir en public ou créer un nouveau salon privé."
-      : localStatus === "eliminated"
-        ? getEliminationStatusCopy(currentRoundNumber, finalistsCount)
-        : localStatus === "spectating"
-          ? "Tu observes la suite du match sans pouvoir saisir. Le classement et le mot révélé restent visibles."
-          : roomPhase === "queue"
-            ? "Attends qu’un match public s’ouvre. L’écran bascule automatiquement dès qu’un salon répond."
-            : roomPhase === "lobby"
-              ? roomSnapshot?.roomCode
-                ? `Salon ${roomSnapshot.roomCode} prêt. Partage le code puis lance quand tout le monde est là.`
-                : "Salon privé prêt. Invite un autre joueur puis lance la partie."
-              : roomPhase === "countdown"
-                ? `La manche ${currentRoundNumber} part dans ${timeValue}. ${formatPlayerCount(activePlayerCount)} encore en course.`
-                : roomPhase === "intermission"
-                  ? revealWord
-                    ? `Réponse affichée: ${revealWord}. ${formatPlayerCount(activePlayerCount)} encore en course.`
-                    : "Transition courte avant la prochaine manche."
-                  : roomPhase === "results"
-                    ? "Le classement final est figé. Tu peux relancer immédiatement une nouvelle partie."
-                    : `Même mot pour tous. ${formatPlayerCount(activePlayerCount)} encore en course.`;
+  const matchInfoBody = matchSummary
+    ? "Le podium est figé. Tu peux repartir en public ou créer un nouveau salon privé."
+    : localStatus === "eliminated"
+      ? getEliminationStatusCopy(currentRoundNumber, finalistsCount)
+      : localStatus === "spectating"
+        ? "Tu observes la suite du match sans pouvoir saisir. Le classement et le mot révélé restent visibles."
+        : roomPhase === "queue"
+          ? "Attends qu’un match public s’ouvre. L’écran bascule automatiquement dès qu’un salon répond."
+          : roomPhase === "lobby"
+            ? roomSnapshot?.roomCode
+              ? `Salon ${roomSnapshot.roomCode} prêt. Partage le code puis lance quand tout le monde est là.`
+              : "Salon privé prêt. Invite un autre joueur puis lance la partie."
+            : roomPhase === "countdown"
+              ? `La manche ${currentRoundNumber} part dans ${timeValue}. ${formatPlayerCount(activePlayerCount)} encore en course.`
+              : roomPhase === "intermission"
+                ? revealWord
+                  ? `Réponse affichée: ${revealWord}. ${formatPlayerCount(activePlayerCount)} encore en course.`
+                  : "Transition courte avant la prochaine manche."
+                : roomPhase === "results"
+                  ? "Le classement final est figé. Tu peux relancer immédiatement une nouvelle partie."
+                  : `Même mot pour tous. ${formatPlayerCount(activePlayerCount)} encore en course.`;
   const matchInfoStats =
     roomPhase === "queue" || roomPhase === "lobby"
       ? [
           { label: "Salon", value: roomCodeLabel },
-          { label: "Joueurs", value: deferredSnapshot?.players.length ?? roomSnapshot?.players.length ?? 0 },
-          { label: "Statut", value: localStatusLabel }
+          {
+            label: "Joueurs",
+            value:
+              deferredSnapshot?.players.length ??
+              roomSnapshot?.players.length ??
+              0,
+          },
+          { label: "Statut", value: localStatusLabel },
         ]
       : [
           { label: "Encore en course", value: activePlayerCount },
-          { label: "Finalistes", value: finalistsCount > 0 ? finalistsCount : "À venir" },
-          { label: "Statut", value: localStatusLabel }
+          {
+            label: "Finalistes",
+            value: finalistsCount > 0 ? finalistsCount : "À venir",
+          },
+          { label: "Statut", value: localStatusLabel },
         ];
-  const showSystemStatusNote = isOperationalStatusMessage(statusMessage) && statusMessage !== matchInfoBody;
+  const showSystemStatusNote =
+    isOperationalStatusMessage(statusMessage) &&
+    statusMessage !== matchInfoBody;
   const showInlineStatusMessage = isLiveRound || showSystemStatusNote;
   const liveBoardMaxWidth = isLiveRound
     ? prefersTouchInput
       ? fullscreenActive
-        ? compactTouchKeyboardVisible
-          ? "min(100%, 21rem)"
-          : "min(100%, 22rem)"
-        : "min(100%, 19.5rem)"
+        ? nativeKeyboardActive
+          ? "min(100%, 15.75rem)"
+          : compactTouchKeyboardVisible
+            ? "min(100%, 16.5rem)"
+            : shortTouchViewport
+              ? "min(100%, 17.5rem)"
+              : "min(100%, 18.5rem)"
+        : shortTouchViewport
+          ? "min(100%, 17rem)"
+          : "min(100%, 18rem)"
       : compactDesktopKeyboard
         ? "max(16rem, min(18.5rem, calc(100dvh - 27rem)))"
-      : compactDesktopRound
-        ? "max(17rem, min(20rem, calc(100dvh - 23rem)))"
-        : "max(20rem, min(27rem, calc(100dvh - 24rem)))"
+        : compactDesktopRound
+          ? "max(17rem, min(20rem, calc(100dvh - 23rem)))"
+          : "max(20rem, min(27rem, calc(100dvh - 24rem)))"
     : compactTouchRoomShell
       ? shortTouchViewport
-        ? "min(100%, 17rem)"
-        : "min(100%, 19rem)"
+        ? "min(100%, 16.5rem)"
+        : "min(100%, 18rem)"
       : prefersTouchInput && isInRoom
-        ? "min(100%, 20rem)"
+        ? "min(100%, 19rem)"
         : "34rem";
   const liveDockMaxWidth = isLiveRound
     ? prefersTouchInput
       ? fullscreenActive
-        ? compactTouchKeyboardVisible
-          ? "min(100%, 21rem)"
-          : "min(100%, 22rem)"
-        : "min(100%, 19.5rem)"
+        ? nativeKeyboardActive
+          ? "min(100%, 18.5rem)"
+          : compactTouchKeyboardVisible
+            ? "min(100%, 19rem)"
+            : "min(100%, 20rem)"
+        : "min(100%, 18.5rem)"
       : compactDesktopKeyboard
         ? "min(100%, 24rem)"
-      : compactDesktopRound
-        ? "max(18rem, min(24rem, calc(100dvh - 19rem)))"
-        : "max(22rem, min(31rem, calc(100dvh - 21rem)))"
+        : compactDesktopRound
+          ? "max(18rem, min(24rem, calc(100dvh - 19rem)))"
+          : "max(22rem, min(31rem, calc(100dvh - 21rem)))"
     : "34rem";
-  const virtualKeyboardMaxWidth = compactTouchKeyboardVisible ? "min(100%, 19rem)" : compactTouchRound ? "min(100%, 20rem)" : compactDesktopKeyboard ? "min(100%, 24rem)" : "34rem";
-  const mobilePinnedDockSpacing = mobilePinnedDock ? liveDockHeight + nativeKeyboardInset + 12 : 0;
-  const mobilePinnedDockOffset = mobilePinnedDock ? nativeKeyboardInset : 0;
+  const virtualKeyboardMaxWidth = compactTouchKeyboardVisible
+    ? "min(100%, 17.5rem)"
+    : compactTouchRound
+      ? "min(100%, 18.5rem)"
+      : compactDesktopKeyboard
+        ? "min(100%, 24rem)"
+        : "34rem";
+  const mobilePinnedDockSpacing = mobilePinnedDock
+    ? liveDockHeight + dockKeyboardInset + 12
+    : 0;
+  const mobilePinnedDockOffset = mobilePinnedDock ? dockKeyboardInset : 0;
+  const fullscreenSurfaceStyle = fullscreenActive
+    ? {
+        height:
+          prefersTouchInput && viewportHeight > 0
+            ? `${viewportHeight}px`
+            : "100dvh",
+        maxHeight:
+          prefersTouchInput && viewportHeight > 0
+            ? `${viewportHeight}px`
+            : "100dvh",
+      }
+    : undefined;
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 250);
@@ -426,9 +566,17 @@ export function PlayShell() {
     const syncInputMode = () => {
       const prefersTouch = mediaQuery.matches || window.innerWidth < 768;
       const visualViewport = window.visualViewport;
-      const visualViewportHeight = Math.round(visualViewport?.height ?? window.innerHeight);
-      const visualViewportOffsetTop = Math.max(0, Math.round(visualViewport?.offsetTop ?? 0));
-      const visualViewportInsetBottom = Math.max(0, window.innerHeight - visualViewportHeight - visualViewportOffsetTop);
+      const visualViewportHeight = Math.round(
+        visualViewport?.height ?? window.innerHeight,
+      );
+      const visualViewportOffsetTop = Math.max(
+        0,
+        Math.round(visualViewport?.offsetTop ?? 0),
+      );
+      const visualViewportInsetBottom = Math.max(
+        0,
+        window.innerHeight - visualViewportHeight - visualViewportOffsetTop,
+      );
 
       setPrefersTouchInput(prefersTouch);
       setViewportHeight(visualViewportHeight);
@@ -452,8 +600,14 @@ export function PlayShell() {
     return () => {
       mediaQuery.removeEventListener("change", handleViewportChange);
       window.removeEventListener("resize", handleViewportChange);
-      window.visualViewport?.removeEventListener("resize", handleViewportChange);
-      window.visualViewport?.removeEventListener("scroll", handleViewportChange);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        handleViewportChange,
+      );
+      window.visualViewport?.removeEventListener(
+        "scroll",
+        handleViewportChange,
+      );
     };
   }, []);
 
@@ -466,7 +620,9 @@ export function PlayShell() {
     }
 
     const syncLiveDockHeight = () => {
-      setLiveDockHeight(Math.ceil(liveDockElement.getBoundingClientRect().height));
+      setLiveDockHeight(
+        Math.ceil(liveDockElement.getBoundingClientRect().height),
+      );
     };
 
     syncLiveDockHeight();
@@ -487,11 +643,18 @@ export function PlayShell() {
   }, [mobilePinnedDock]);
 
   useEffect(() => {
-    const canFullscreen = Boolean(document.fullscreenEnabled && playSurfaceRef.current?.requestFullscreen);
+    const canFullscreen = Boolean(
+      document.fullscreenEnabled && playSurfaceRef.current?.requestFullscreen,
+    );
     setIsFullscreenSupported(canFullscreen);
 
     const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(playSurfaceRef.current && document.fullscreenElement === playSurfaceRef.current));
+      setIsFullscreen(
+        Boolean(
+          playSurfaceRef.current &&
+          document.fullscreenElement === playSurfaceRef.current,
+        ),
+      );
     };
 
     const handleFullscreenError = () => {
@@ -572,7 +735,8 @@ export function PlayShell() {
       previousBoard.wordLength !== boardSnapshot.wordLength;
     const lockSignatureChanged =
       !previousBoard ||
-      previousBoard.revealedIndexes.join(",") !== boardSnapshot.revealedIndexes.join(",") ||
+      previousBoard.revealedIndexes.join(",") !==
+        boardSnapshot.revealedIndexes.join(",") ||
       previousBoard.hintLetters.join("") !== boardSnapshot.hintLetters.join("");
 
     if (roundChanged) {
@@ -583,11 +747,16 @@ export function PlayShell() {
 
       setGuess((current) =>
         extractEditableGuess(
-          composeGuessDraft(current, previousBoard, previousBlockedLetters, previousKnownLetterLimits),
+          composeGuessDraft(
+            current,
+            previousBoard,
+            previousBlockedLetters,
+            previousKnownLetterLimits,
+          ),
           boardSnapshot,
           blockedLetters,
-          knownLetterLimits
-        )
+          knownLetterLimits,
+        ),
       );
     }
 
@@ -611,7 +780,9 @@ export function PlayShell() {
 
     if (nextStatus !== previousStatus) {
       if (nextStatus === "eliminated") {
-        setStatusMessage(getEliminationStatusCopy(currentRoundNumber, finalistsCount));
+        setStatusMessage(
+          getEliminationStatusCopy(currentRoundNumber, finalistsCount),
+        );
       } else if (nextStatus === "spectating") {
         setStatusMessage("Tu observes cette phase. La saisie est désactivée.");
       }
@@ -621,8 +792,15 @@ export function PlayShell() {
   }, [currentRoundNumber, finalistsCount, localPlayer?.status]);
 
   useEffect(() => {
-    if (liveBoardSnapshot && roomPhase === "round" && localPlayer?.status === "playing") {
-      if (window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 768) {
+    if (
+      liveBoardSnapshot &&
+      roomPhase === "round" &&
+      localPlayer?.status === "playing"
+    ) {
+      if (
+        window.matchMedia("(pointer: coarse)").matches ||
+        window.innerWidth < 768
+      ) {
         return;
       }
 
@@ -631,7 +809,12 @@ export function PlayShell() {
   }, [liveBoardSnapshot?.roundIndex, localPlayer?.status, roomPhase]);
 
   useEffect(() => {
-    if (!prefersTouchInput || !isInputFocused || showTouchKeyboard || fullscreenActive) {
+    if (
+      !prefersTouchInput ||
+      !isInputFocused ||
+      showTouchKeyboard ||
+      fullscreenActive
+    ) {
       return;
     }
 
@@ -644,7 +827,7 @@ export function PlayShell() {
     const syncFocusedInput = () => {
       target.scrollIntoView({
         block: "end",
-        inline: "nearest"
+        inline: "nearest",
       });
     };
 
@@ -660,7 +843,11 @@ export function PlayShell() {
       return;
     }
 
-    if (!document.fullscreenEnabled || !playSurfaceRef.current.requestFullscreen || prefersTouchInput) {
+    if (
+      !document.fullscreenEnabled ||
+      !playSurfaceRef.current.requestFullscreen ||
+      prefersTouchInput
+    ) {
       setIsPseudoFullscreen((current) => !current);
       return;
     }
@@ -679,10 +866,19 @@ export function PlayShell() {
   async function connectToRoom(
     endpoint: string,
     options?: {
-      action: Exclude<PendingAction, "guest" | "upgrade" | "signin" | "passkeyAdd" | "passkeySignIn" | "signOut" | null>;
+      action: Exclude<
+        PendingAction,
+        | "guest"
+        | "upgrade"
+        | "signin"
+        | "passkeyAdd"
+        | "passkeySignIn"
+        | "signOut"
+        | null
+      >;
       body?: Record<string, unknown>;
       pendingMessage: string;
-    }
+    },
   ) {
     if (!sessionUser) {
       setStatusMessage("Crée d’abord une session invitée ou connecte-toi.");
@@ -691,17 +887,21 @@ export function PlayShell() {
 
     try {
       setPendingAction(options?.action ?? "public");
-      setStatusMessage(options?.pendingMessage ?? "Préparation de l’entrée en partie…");
+      setStatusMessage(
+        options?.pendingMessage ?? "Préparation de l’entrée en partie…",
+      );
 
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
-        body: options?.body ? JSON.stringify(options.body) : undefined
+        body: options?.body ? JSON.stringify(options.body) : undefined,
       });
 
-      const payload = (await response.json()) as TicketBundle & { error?: string };
+      const payload = (await response.json()) as TicketBundle & {
+        error?: string;
+      };
 
       if (!response.ok) {
         throw new Error(payload.error ?? "Ticket refusé.");
@@ -721,7 +921,12 @@ export function PlayShell() {
 
       const client = new Client(payload.wsEndpoint);
       client.auth.token = payload.token;
-      const room = await client.consumeSeatReservation(toLegacySeatReservation(payload.reservation, payload.wsEndpoint) as never);
+      const room = await client.consumeSeatReservation(
+        toLegacySeatReservation(
+          payload.reservation,
+          payload.wsEndpoint,
+        ) as never,
+      );
 
       clientRef.current = client;
       roomRef.current = room;
@@ -733,7 +938,10 @@ export function PlayShell() {
               return current;
             }
 
-            if (snapshot.phase === "round" && current.roundIndex !== snapshot.currentRoundIndex) {
+            if (
+              snapshot.phase === "round" &&
+              current.roundIndex !== snapshot.currentRoundIndex
+            ) {
               return null;
             }
 
@@ -756,7 +964,9 @@ export function PlayShell() {
         }
 
         if (typeof result.clueRevealedIndex === "number") {
-          setStatusMessage(`Indice débloqué sur la case ${result.clueRevealedIndex + 1}.`);
+          setStatusMessage(
+            `Indice débloqué sur la case ${result.clueRevealedIndex + 1}.`,
+          );
           return;
         }
 
@@ -778,14 +988,22 @@ export function PlayShell() {
       });
 
       room.onLeave((code, reason) => {
-        setStatusMessage(`Connexion au salon fermée (${code})${reason ? `: ${reason}` : ""}`);
+        setStatusMessage(
+          `Connexion au salon fermée (${code})${reason ? `: ${reason}` : ""}`,
+        );
       });
 
       room.send("request_sync");
       window.dispatchEvent(new Event("motus-metrics-refresh"));
-      setStatusMessage(payload.roomCode ? `Salon privé ${payload.roomCode} prêt.` : "Match public lancé.");
+      setStatusMessage(
+        payload.roomCode
+          ? `Salon privé ${payload.roomCode} prêt.`
+          : "Match public lancé.",
+      );
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Connexion impossible.");
+      setStatusMessage(
+        error instanceof Error ? error.message : "Connexion impossible.",
+      );
     } finally {
       setPendingAction(null);
     }
@@ -798,7 +1016,9 @@ export function PlayShell() {
 
     if (result.error) {
       setPendingAction(null);
-      setStatusMessage(result.error.message ?? "Impossible de créer la session invitée.");
+      setStatusMessage(
+        result.error.message ?? "Impossible de créer la session invitée.",
+      );
       return;
     }
 
@@ -814,12 +1034,14 @@ export function PlayShell() {
     const result = await authClient.signUp.email({
       name: nameInput || sessionUser?.name || "Joueur Motus",
       email: emailInput,
-      password: passwordInput
+      password: passwordInput,
     });
 
     if (result.error) {
       setPendingAction(null);
-      setStatusMessage(result.error.message ?? "Création de compte impossible.");
+      setStatusMessage(
+        result.error.message ?? "Création de compte impossible.",
+      );
       return;
     }
 
@@ -835,7 +1057,7 @@ export function PlayShell() {
     setStatusMessage("Connexion au compte…");
     const result = await authClient.signIn.email({
       email: emailInput,
-      password: passwordInput
+      password: passwordInput,
     });
 
     if (result.error) {
@@ -855,12 +1077,14 @@ export function PlayShell() {
     setPendingAction("passkeyAdd");
     setStatusMessage("Enregistrement de la passkey…");
     const result = await authClient.passkey.addPasskey({
-      name: "Appareil principal"
+      name: "Appareil principal",
     });
 
     if (result.error) {
       setPendingAction(null);
-      setStatusMessage(result.error.message ?? "Impossible d’ajouter une passkey.");
+      setStatusMessage(
+        result.error.message ?? "Impossible d’ajouter une passkey.",
+      );
       return;
     }
 
@@ -916,7 +1140,12 @@ export function PlayShell() {
       return;
     }
 
-      const normalized = composeGuessDraft(guess, liveBoardSnapshot, blockedLetters, knownLetterLimits);
+    const normalized = composeGuessDraft(
+      guess,
+      liveBoardSnapshot,
+      blockedLetters,
+      knownLetterLimits,
+    );
 
     if (normalized.length !== liveBoardSnapshot.wordLength) {
       setStatusMessage(`Il faut ${liveBoardSnapshot.wordLength} lettres.`);
@@ -937,7 +1166,14 @@ export function PlayShell() {
       return;
     }
 
-      setGuess((current) => extractEditableGuess(`${current}${letter}`, liveBoardSnapshot, blockedLetters, knownLetterLimits));
+    setGuess((current) =>
+      extractEditableGuess(
+        `${current}${letter}`,
+        liveBoardSnapshot,
+        blockedLetters,
+        knownLetterLimits,
+      ),
+    );
   }
 
   function removeLetter() {
@@ -954,13 +1190,16 @@ export function PlayShell() {
         ? "relative flex h-9 w-full items-center justify-center overflow-hidden rounded-lg border px-0.5 text-[0.95rem] transition"
         : compactDesktopKeyboard
           ? "relative flex h-9 w-full items-center justify-center overflow-hidden rounded-lg border px-0.5 text-[0.92rem] transition sm:h-10 sm:text-[1rem]"
-        : "relative flex h-11 w-full items-center justify-center overflow-hidden rounded-xl border px-1 text-base sm:h-12 sm:rounded-2xl sm:px-2 sm:text-lg transition",
-      tone === "correct" && "border-lime-200/85 bg-lime-300 text-slate-950 shadow-[0_12px_22px_rgba(178,255,82,0.16)]",
-      tone === "present" && "border-amber-200/85 bg-amber-300 text-slate-950 shadow-[0_10px_18px_rgba(255,190,85,0.14)]",
+          : "relative flex h-11 w-full items-center justify-center overflow-hidden rounded-xl border px-1 text-base sm:h-12 sm:rounded-2xl sm:px-2 sm:text-lg transition",
+      tone === "correct" &&
+        "border-lime-200/85 bg-lime-300 text-slate-950 shadow-[0_12px_22px_rgba(178,255,82,0.16)]",
+      tone === "present" &&
+        "border-amber-200/85 bg-amber-300 text-slate-950 shadow-[0_10px_18px_rgba(255,190,85,0.14)]",
       tone === "hint" && "border-cyan-200/70 bg-cyan-300 text-slate-950",
-      tone === "absent" && "cursor-not-allowed border-slate-700/90 bg-slate-800 text-slate-300",
+      tone === "absent" &&
+        "cursor-not-allowed border-slate-700/90 bg-slate-800 text-slate-300",
       tone === "unused" &&
-        "border-white/10 bg-white/[0.04] text-white hover:border-cyan-300/40 hover:bg-cyan-300/10 focus-visible:border-cyan-300/45"
+        "border-white/10 bg-white/[0.04] text-white hover:border-cyan-300/40 hover:bg-cyan-300/10 focus-visible:border-cyan-300/45",
     );
   }
 
@@ -970,7 +1209,10 @@ export function PlayShell() {
     }
 
     const iconTone =
-      tone === "hint" || tone === "correct" || tone === "present" || tone === "absent"
+      tone === "hint" ||
+      tone === "correct" ||
+      tone === "present" ||
+      tone === "absent"
         ? tone
         : null;
 
@@ -978,11 +1220,17 @@ export function PlayShell() {
       <span
         className={clsx(
           "pointer-events-none absolute z-10 flex items-center justify-center rounded-full border",
-          compactDesktopKeyboard ? "right-1 top-1 h-4 w-4" : "right-1.5 top-1.5 h-4.5 w-4.5",
-          iconTone === "correct" && "border-slate-950/12 bg-slate-950/10 text-slate-950",
-          iconTone === "present" && "border-slate-950/12 bg-slate-950/10 text-slate-950",
-          iconTone === "absent" && "border-white/10 bg-slate-950/45 text-slate-200",
-          iconTone === "hint" && "border-cyan-950/12 bg-slate-950/12 text-slate-950"
+          compactDesktopKeyboard
+            ? "right-1 top-1 h-4 w-4"
+            : "right-1.5 top-1.5 h-4.5 w-4.5",
+          iconTone === "correct" &&
+            "border-slate-950/12 bg-slate-950/10 text-slate-950",
+          iconTone === "present" &&
+            "border-slate-950/12 bg-slate-950/10 text-slate-950",
+          iconTone === "absent" &&
+            "border-white/10 bg-slate-950/45 text-slate-200",
+          iconTone === "hint" &&
+            "border-cyan-950/12 bg-slate-950/12 text-slate-950",
         )}
       >
         <FeedbackToneIcon
@@ -1016,18 +1264,36 @@ export function PlayShell() {
   }
 
   const liveRows = liveBoardSnapshot?.rows ?? [];
-  const lockedLetters = useMemo(() => getLockedLetters(liveBoardSnapshot), [liveBoardSnapshot]);
-  const guessDraft = useMemo(
-    () => composeGuessDraft(guess, liveBoardSnapshot, blockedLetters, knownLetterLimits),
-    [blockedLetters, liveBoardSnapshot, guess, knownLetterLimits]
+  const lockedLetters = useMemo(
+    () => getLockedLetters(liveBoardSnapshot),
+    [liveBoardSnapshot],
   );
-  const editableSlotCount = useMemo(() => getEditableSlotCount(liveBoardSnapshot), [liveBoardSnapshot]);
+  const guessDraft = useMemo(
+    () =>
+      composeGuessDraft(
+        guess,
+        liveBoardSnapshot,
+        blockedLetters,
+        knownLetterLimits,
+      ),
+    [blockedLetters, liveBoardSnapshot, guess, knownLetterLimits],
+  );
+  const editableSlotCount = useMemo(
+    () => getEditableSlotCount(liveBoardSnapshot),
+    [liveBoardSnapshot],
+  );
   const displayRows = useMemo(() => {
     if (!liveBoardSnapshot) {
       return [];
     }
 
-    const rows: Array<Array<{ letter: string; state?: "correct" | "present" | "absent" | "pending"; hint?: boolean }>> = [];
+    const rows: Array<
+      Array<{
+        letter: string;
+        state?: "correct" | "present" | "absent" | "pending";
+        hint?: boolean;
+      }>
+    > = [];
 
     for (let rowIndex = 0; rowIndex < 6; rowIndex += 1) {
       const existing = liveRows[rowIndex];
@@ -1037,35 +1303,63 @@ export function PlayShell() {
           existing.tiles.map((tile, index) => ({
             letter: existing.guess[index] ?? "",
             state: tile,
-            hint: liveBoardSnapshot.revealedIndexes.includes(index)
-          }))
+            hint: liveBoardSnapshot.revealedIndexes.includes(index),
+          })),
         );
         continue;
       }
 
-      const isCurrentRow = rowIndex === liveRows.length && roomPhase === "round" && localPlayer?.status === "playing";
+      const isCurrentRow =
+        rowIndex === liveRows.length &&
+        roomPhase === "round" &&
+        localPlayer?.status === "playing";
 
       rows.push(
         Array.from({ length: liveBoardSnapshot.wordLength }, (_, index) => {
-          const typedLetter = isCurrentRow ? guessDraft[index] ?? "" : "";
-          const hintLetter = !typedLetter ? lockedLetters[index] ?? "" : "";
+          const typedLetter = isCurrentRow ? (guessDraft[index] ?? "") : "";
+          const hintLetter = !typedLetter ? (lockedLetters[index] ?? "") : "";
           const isLockedCell = Boolean(lockedLetters[index]);
 
           return {
             letter: typedLetter || hintLetter,
             state: typedLetter && !isLockedCell ? "pending" : undefined,
-            hint: Boolean(hintLetter)
+            hint: Boolean(hintLetter),
           };
-        })
+        }),
       );
     }
 
     return rows;
-  }, [guessDraft, liveBoardSnapshot, liveRows, localPlayer?.status, lockedLetters, roomPhase]);
+  }, [
+    guessDraft,
+    liveBoardSnapshot,
+    liveRows,
+    localPlayer?.status,
+    lockedLetters,
+    roomPhase,
+  ]);
   const remainingLettersLabel =
-    editableSlotCount <= 0 ? "Mot prêt" : editableSlotCount === 1 ? "1 lettre à compléter" : `${editableSlotCount} lettres à compléter`;
-  const keyboardToggleLabel = showDesktopKeyboard ? "Masquer le clavier visuel" : "Afficher le clavier visuel";
-  const touchKeyboardToggleLabel = showTouchKeyboard ? "Masquer le clavier intégré" : "Clavier intégré";
+    editableSlotCount <= 0
+      ? "Mot prêt"
+      : editableSlotCount === 1
+        ? "1 lettre à compléter"
+        : `${editableSlotCount} lettres à compléter`;
+  const keyboardToggleLabel = compactMetricStrip
+    ? showDesktopKeyboard
+      ? "Masquer clavier"
+      : "Clavier"
+    : showDesktopKeyboard
+      ? "Masquer le clavier visuel"
+      : "Afficher le clavier visuel";
+  const touchKeyboardToggleLabel = showTouchKeyboard
+    ? "Clavier système"
+    : "Clavier intégré";
+  const fullscreenButtonLabel =
+    compactMetricStrip && fullscreenActive
+      ? "Quitter"
+      : fullscreenActive
+        ? "Quitter le plein écran"
+        : "Plein écran";
 
   return (
     <div
@@ -1073,25 +1367,33 @@ export function PlayShell() {
       className={clsx(
         "flex min-h-0 flex-1 flex-col",
         isLiveRound && "h-full overflow-hidden",
-        fullscreenActive && "fixed inset-0 z-[80] h-[100dvh] w-screen bg-[#040811]"
+        fullscreenActive &&
+          "fixed inset-x-0 top-0 z-[80] w-screen overflow-hidden bg-[#040811]",
       )}
+      style={fullscreenSurfaceStyle}
     >
       <GlassPanel
         className={clsx(
           "flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-5 md:p-6",
           compactTouchRound && "p-2.5",
           fullscreenActive &&
-            "rounded-none border-0 bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(3,7,16,1))] px-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-[calc(env(safe-area-inset-top)+0.5rem)] shadow-none sm:p-4"
+            "rounded-none border-0 bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(3,7,16,1))] px-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-[calc(env(safe-area-inset-top)+0.5rem)] shadow-none sm:p-4",
         )}
       >
         <div
           className={clsx(
             "flex-1 grid min-h-0 items-stretch gap-6 lg:gap-8",
             compactTouchRound && "gap-2.5",
-            isInRoom ? "grid-cols-1" : "lg:grid-cols-[1.15fr_0.85fr]"
+            isInRoom ? "grid-cols-1" : "lg:grid-cols-[1.15fr_0.85fr]",
           )}
         >
-          <div className={clsx("min-w-0 flex min-h-0 flex-col gap-6", compactTouchRound && "gap-2.5", isLiveRound && "overflow-hidden")}>
+          <div
+            className={clsx(
+              "min-w-0 flex min-h-0 flex-col gap-6",
+              compactTouchRound && "gap-2.5",
+              isLiveRound && "overflow-hidden",
+            )}
+          >
             {!isInRoom ? (
               <SectionHeader
                 eyebrow="Jouer"
@@ -1099,8 +1401,15 @@ export function PlayShell() {
                 body="Tout se passe au même endroit: session, entrée en partie et manche en direct. Tu peux commencer en invité puis créer un compte sans perdre ton profil."
                 action={
                   canToggleFullscreen ? (
-                    <button className="button-secondary" type="button" onClick={() => void toggleFullscreen()} aria-pressed={fullscreenActive}>
-                      {fullscreenActive ? "Quitter le plein écran" : "Plein écran"}
+                    <button
+                      className="button-secondary"
+                      type="button"
+                      onClick={() => void toggleFullscreen()}
+                      aria-pressed={fullscreenActive}
+                    >
+                      {fullscreenActive
+                        ? "Quitter le plein écran"
+                        : "Plein écran"}
                     </button>
                   ) : undefined
                 }
@@ -1111,20 +1420,33 @@ export function PlayShell() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="min-w-0 rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
                   <p className="eyebrow">Invité express</p>
-                  <h3 className="mt-3 font-display text-2xl text-white sm:text-3xl">Démarrer sans compte</h3>
+                  <h3 className="mt-3 font-display text-2xl text-white sm:text-3xl">
+                    Démarrer sans compte
+                  </h3>
                   <p className="mt-3 text-sm leading-6 text-slate-300">
-                    Une session locale se crée en un clic. Tu peux la convertir ensuite en compte, sans perdre ton profil.
+                    Une session locale se crée en un clic. Tu peux la convertir
+                    ensuite en compte, sans perdre ton profil.
                   </p>
-                  <button className="button-primary mt-5 w-full" type="button" onClick={continueAsGuest} disabled={isPending || isBusy || pendingAction !== null}>
-                    {pendingAction === "guest" ? "Création de la session…" : "Continuer en invité"}
+                  <button
+                    className="button-primary mt-5 w-full"
+                    type="button"
+                    onClick={continueAsGuest}
+                    disabled={isPending || isBusy || pendingAction !== null}
+                  >
+                    {pendingAction === "guest"
+                      ? "Création de la session…"
+                      : "Continuer en invité"}
                   </button>
                 </div>
 
                 <div className="min-w-0 rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
                   <p className="eyebrow">Connexion</p>
-                  <h3 className="mt-3 font-display text-2xl text-white sm:text-3xl">Passkey ou email</h3>
+                  <h3 className="mt-3 font-display text-2xl text-white sm:text-3xl">
+                    Passkey ou email
+                  </h3>
                   <p className="mt-3 text-sm leading-6 text-slate-300">
-                    Reprends ta progression avec une passkey déjà enregistrée ou ton email et ton mot de passe.
+                    Reprends ta progression avec une passkey déjà enregistrée ou
+                    ton email et ton mot de passe.
                   </p>
                   <button
                     className="button-secondary mt-5 w-full"
@@ -1132,7 +1454,9 @@ export function PlayShell() {
                     onClick={signInWithPasskey}
                     disabled={isPending || isBusy || pendingAction !== null}
                   >
-                    {pendingAction === "passkeySignIn" ? "Connexion passkey…" : "Se connecter avec une passkey"}
+                    {pendingAction === "passkeySignIn"
+                      ? "Connexion passkey…"
+                      : "Se connecter avec une passkey"}
                   </button>
                   <div className="mt-5 space-y-3">
                     <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.28em] text-slate-500">
@@ -1154,11 +1478,21 @@ export function PlayShell() {
                         placeholder="Mot de passe"
                         type="password"
                         value={passwordInput}
-                        onChange={(event) => setPasswordInput(event.target.value)}
+                        onChange={(event) =>
+                          setPasswordInput(event.target.value)
+                        }
                         autoComplete="current-password"
                       />
-                      <button className="button-primary w-full" type="submit" disabled={!emailInput || !passwordInput || isSubmittingSession}>
-                        {pendingAction === "signin" ? "Connexion…" : "Se connecter"}
+                      <button
+                        className="button-primary w-full"
+                        type="submit"
+                        disabled={
+                          !emailInput || !passwordInput || isSubmittingSession
+                        }
+                      >
+                        {pendingAction === "signin"
+                          ? "Connexion…"
+                          : "Se connecter"}
                       </button>
                     </form>
                   </div>
@@ -1174,12 +1508,14 @@ export function PlayShell() {
                       onClick={() =>
                         void connectToRoom("/api/game/public-ticket", {
                           action: "public",
-                          pendingMessage: "Recherche d’un match public…"
+                          pendingMessage: "Recherche d’un match public…",
                         })
                       }
                       disabled={isBusy || isConnectingToRoom}
                     >
-                      {publicTicketPending ? "Recherche en cours…" : "Rejoindre le matchmaking"}
+                      {publicTicketPending
+                        ? "Recherche en cours…"
+                        : "Rejoindre le matchmaking"}
                     </button>
                     <button
                       className="button-secondary relative z-10 w-full"
@@ -1187,17 +1523,24 @@ export function PlayShell() {
                       onClick={() =>
                         void connectToRoom("/api/game/private-ticket", {
                           action: "private",
-                          pendingMessage: "Création du salon privé…"
+                          pendingMessage: "Création du salon privé…",
                         })
                       }
                       disabled={isBusy || isConnectingToRoom}
                     >
-                      {privateTicketPending ? "Création du salon…" : "Créer un salon privé"}
+                      {privateTicketPending
+                        ? "Création du salon…"
+                        : "Créer un salon privé"}
                     </button>
                   </div>
 
-                  <p className="text-sm leading-6 text-slate-400" aria-live="polite">
-                    {isConnectingToRoom ? "Connexion en cours. L’écran basculera dès que le salon répond." : "Public pour aller vite, privé pour inviter par code."}
+                  <p
+                    className="text-sm leading-6 text-slate-400"
+                    aria-live="polite"
+                  >
+                    {isConnectingToRoom
+                      ? "Connexion en cours. L’écran basculera dès que le salon répond."
+                      : "Public pour aller vite, privé pour inviter par code."}
                   </p>
 
                   <div className="rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
@@ -1207,7 +1550,9 @@ export function PlayShell() {
                         className="input-shell"
                         placeholder="AB12CD"
                         value={privateCode}
-                        onChange={(event) => setPrivateCode(event.target.value.toUpperCase())}
+                        onChange={(event) =>
+                          setPrivateCode(event.target.value.toUpperCase())
+                        }
                         autoCapitalize="characters"
                         autoCorrect="off"
                       />
@@ -1218,12 +1563,14 @@ export function PlayShell() {
                           void connectToRoom("/api/game/private-join", {
                             action: "privateJoin",
                             body: { roomCode: privateCode },
-                            pendingMessage: `Connexion au salon ${privateCode.trim().toUpperCase()}…`
+                            pendingMessage: `Connexion au salon ${privateCode.trim().toUpperCase()}…`,
                           })
                         }
                         disabled={!privateCode || isBusy || isConnectingToRoom}
                       >
-                        {privateJoinPending ? "Connexion…" : "Entrer dans le salon"}
+                        {privateJoinPending
+                          ? "Connexion…"
+                          : "Entrer dans le salon"}
                       </button>
                     </div>
                   </div>
@@ -1233,24 +1580,42 @@ export function PlayShell() {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <p className="eyebrow">Compte</p>
-                      <h3 className="mt-2 break-words font-display text-2xl text-white sm:text-3xl">{sessionUser.name}</h3>
-                      <p className="mt-2 break-all text-sm text-slate-300">{sessionUser.email}</p>
+                      <h3 className="mt-2 break-words font-display text-2xl text-white sm:text-3xl">
+                        {sessionUser.name}
+                      </h3>
+                      <p className="mt-2 break-all text-sm text-slate-300">
+                        {sessionUser.email}
+                      </p>
                     </div>
-                    <MetricBadge label="Type" value={sessionUser.isAnonymous ? "Invité" : "Compte"} />
+                    <MetricBadge
+                      label="Type"
+                      value={sessionUser.isAnonymous ? "Invité" : "Compte"}
+                    />
                   </div>
 
                   <div className="mt-5 grid grid-cols-2 gap-2">
-                    <button className="button-secondary flex-1" type="button" onClick={() => setAuthMode("upgrade")}>
+                    <button
+                      className="button-secondary flex-1"
+                      type="button"
+                      onClick={() => setAuthMode("upgrade")}
+                    >
                       Créer un compte
                     </button>
-                    <button className="button-secondary flex-1" type="button" onClick={() => setAuthMode("signin")}>
+                    <button
+                      className="button-secondary flex-1"
+                      type="button"
+                      onClick={() => setAuthMode("signin")}
+                    >
                       Me connecter
                     </button>
                   </div>
 
                   <div className="mt-5 space-y-3">
                     {authMode === "upgrade" ? (
-                      <form className="space-y-3" onSubmit={handleUpgradeSubmit}>
+                      <form
+                        className="space-y-3"
+                        onSubmit={handleUpgradeSubmit}
+                      >
                         <input
                           className="input-shell"
                           placeholder="Nom affiché"
@@ -1263,7 +1628,9 @@ export function PlayShell() {
                           placeholder="email@domaine.com"
                           type="email"
                           value={emailInput}
-                          onChange={(event) => setEmailInput(event.target.value)}
+                          onChange={(event) =>
+                            setEmailInput(event.target.value)
+                          }
                           autoComplete="email"
                         />
                         <input
@@ -1271,11 +1638,21 @@ export function PlayShell() {
                           placeholder="Mot de passe"
                           type="password"
                           value={passwordInput}
-                          onChange={(event) => setPasswordInput(event.target.value)}
+                          onChange={(event) =>
+                            setPasswordInput(event.target.value)
+                          }
                           autoComplete="new-password"
                         />
-                        <button className="button-primary w-full" type="submit" disabled={!emailInput || !passwordInput || isSubmittingSession}>
-                          {pendingAction === "upgrade" ? "Création…" : "Créer ou lier mon compte"}
+                        <button
+                          className="button-primary w-full"
+                          type="submit"
+                          disabled={
+                            !emailInput || !passwordInput || isSubmittingSession
+                          }
+                        >
+                          {pendingAction === "upgrade"
+                            ? "Création…"
+                            : "Créer ou lier mon compte"}
                         </button>
                       </form>
                     ) : (
@@ -1285,7 +1662,9 @@ export function PlayShell() {
                           placeholder="email@domaine.com"
                           type="email"
                           value={emailInput}
-                          onChange={(event) => setEmailInput(event.target.value)}
+                          onChange={(event) =>
+                            setEmailInput(event.target.value)
+                          }
                           autoComplete="email"
                         />
                         <input
@@ -1293,21 +1672,45 @@ export function PlayShell() {
                           placeholder="Mot de passe"
                           type="password"
                           value={passwordInput}
-                          onChange={(event) => setPasswordInput(event.target.value)}
+                          onChange={(event) =>
+                            setPasswordInput(event.target.value)
+                          }
                           autoComplete="current-password"
                         />
-                        <button className="button-primary w-full" type="submit" disabled={!emailInput || !passwordInput || isSubmittingSession}>
-                          {pendingAction === "signin" ? "Connexion…" : "Se connecter"}
+                        <button
+                          className="button-primary w-full"
+                          type="submit"
+                          disabled={
+                            !emailInput || !passwordInput || isSubmittingSession
+                          }
+                        >
+                          {pendingAction === "signin"
+                            ? "Connexion…"
+                            : "Se connecter"}
                         </button>
                       </form>
                     )}
 
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <button className="button-secondary w-full" type="button" onClick={addPasskey} disabled={pendingAction === "passkeyAdd"}>
-                        {pendingAction === "passkeyAdd" ? "Ajout…" : "Ajouter une passkey"}
+                      <button
+                        className="button-secondary w-full"
+                        type="button"
+                        onClick={addPasskey}
+                        disabled={pendingAction === "passkeyAdd"}
+                      >
+                        {pendingAction === "passkeyAdd"
+                          ? "Ajout…"
+                          : "Ajouter une passkey"}
                       </button>
-                      <button className="button-danger w-full" type="button" onClick={signOut} disabled={pendingAction === "signOut"}>
-                        {pendingAction === "signOut" ? "Déconnexion…" : "Se déconnecter"}
+                      <button
+                        className="button-danger w-full"
+                        type="button"
+                        onClick={signOut}
+                        disabled={pendingAction === "signOut"}
+                      >
+                        {pendingAction === "signOut"
+                          ? "Déconnexion…"
+                          : "Se déconnecter"}
                       </button>
                     </div>
                   </div>
@@ -1318,32 +1721,90 @@ export function PlayShell() {
                 className={clsx(
                   "grid min-h-0 gap-5",
                   lockedSidebarToDesktop
-                    ? "xl:grid-cols-[minmax(0,1fr)_18.5rem] 2xl:grid-cols-[minmax(0,1fr)_20rem]"
-                    : "xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]"
+                    ? "lg:grid-cols-[minmax(0,1fr)_16.5rem] xl:grid-cols-[minmax(0,1fr)_17.5rem] 2xl:grid-cols-[minmax(0,1fr)_18.5rem]"
+                    : "xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]",
                 )}
               >
-                <div className={clsx("min-w-0", isLiveRound ? `flex min-h-0 flex-col overflow-hidden ${compactLiveRound ? "gap-3" : "gap-4"}` : "space-y-5")}>
-                  <div className={clsx("flex flex-wrap gap-2", compactTouchRound && "gap-1", compactDesktopRound && "gap-1.5")}>
-                    {!compactLiveRound ? <MetricBadge label="Phase" value={phaseBadgeValue} /> : null}
-                    <MetricBadge label="Temps" value={timeValue} tone={roomPhase === "round" ? "danger" : "default"} />
-                    {!compactLiveRound ? <MetricBadge label="Salon" value={roomSnapshot.roomCode ?? "Public"} /> : null}
-                    {!compactLiveRound ? <MetricBadge label="Mode" value={modeLabel} tone="good" /> : null}
-                    {isLiveRound ? <MetricBadge label="Score" value={localPlayer?.score ?? 0} /> : null}
-                    {isLiveRound && liveBoardSnapshot ? <MetricBadge label="Essais" value={liveBoardSnapshot.attemptsRemaining} tone="good" /> : null}
+                <div
+                  className={clsx(
+                    "min-w-0",
+                    isLiveRound
+                      ? `flex min-h-0 flex-col overflow-hidden ${compactLiveRound ? "gap-3" : "gap-4"}`
+                      : "space-y-5",
+                  )}
+                >
+                  <div
+                    className={clsx(
+                      "flex flex-wrap gap-2",
+                      compactTouchRound && "gap-1",
+                      compactDesktopRound && "gap-1.5",
+                    )}
+                  >
+                    {!compactLiveRound ? (
+                      <MetricBadge
+                        label="Phase"
+                        value={phaseBadgeValue}
+                        compact={compactMetricStrip}
+                      />
+                    ) : null}
+                    <MetricBadge
+                      label="Temps"
+                      value={timeValue}
+                      tone={roomPhase === "round" ? "danger" : "default"}
+                      compact={compactMetricStrip}
+                    />
+                    {!compactLiveRound && !lockedSidebarToDesktop ? (
+                      <MetricBadge
+                        label="Salon"
+                        value={roomSnapshot.roomCode ?? "Public"}
+                        compact={compactMetricStrip}
+                      />
+                    ) : null}
+                    {!compactLiveRound && !lockedSidebarToDesktop ? (
+                      <MetricBadge
+                        label="Mode"
+                        value={modeLabel}
+                        tone="good"
+                        compact={compactMetricStrip}
+                      />
+                    ) : null}
+                    {isLiveRound ? (
+                      <MetricBadge
+                        label="Score"
+                        value={localPlayer?.score ?? 0}
+                        compact={compactMetricStrip}
+                      />
+                    ) : null}
+                    {isLiveRound && liveBoardSnapshot ? (
+                      <MetricBadge
+                        label="Essais"
+                        value={liveBoardSnapshot.attemptsRemaining}
+                        tone="good"
+                        compact={compactMetricStrip}
+                      />
+                    ) : null}
                     {canToggleFullscreen ? (
                       <button
-                        className={clsx("button-secondary min-h-10 px-3 py-2 text-sm", compactLiveRound && "min-h-9 px-2.5 py-1.5 text-xs")}
+                        className={clsx(
+                          "button-secondary min-h-10 px-3 py-2 text-sm",
+                          compactMetricStrip && "min-h-9 px-2.5 py-1.5 text-xs",
+                        )}
                         type="button"
                         onClick={() => void toggleFullscreen()}
                       >
-                        {fullscreenActive ? "Quitter le plein écran" : "Plein écran"}
+                        {fullscreenButtonLabel}
                       </button>
                     ) : null}
                     {isLiveRound && !prefersTouchInput ? (
                       <button
-                        className={clsx("button-secondary min-h-10 px-3 py-2 text-sm", compactDesktopKeyboard && "min-h-9 px-2.5 py-1.5 text-xs")}
+                        className={clsx(
+                          "button-secondary min-h-10 px-3 py-2 text-sm",
+                          compactMetricStrip && "min-h-9 px-2.5 py-1.5 text-xs",
+                        )}
                         type="button"
-                        onClick={() => setShowDesktopKeyboard((current) => !current)}
+                        onClick={() =>
+                          setShowDesktopKeyboard((current) => !current)
+                        }
                         aria-pressed={showDesktopKeyboard}
                       >
                         {keyboardToggleLabel}
@@ -1351,39 +1812,68 @@ export function PlayShell() {
                     ) : null}
                   </div>
 
-                    <div
-                      className={clsx(
-                        "min-h-0 rounded-[30px] border border-white/8 bg-slate-950/72",
-                        compactTouchRound ? "relative p-2.5" : compactLiveRound ? "p-3" : "p-4 sm:p-5",
-                        isLiveRound && "flex h-full flex-col overflow-hidden"
-                  )}
-                >
+                  <div
+                    className={clsx(
+                      "min-h-0 rounded-[30px] border border-white/8 bg-slate-950/72",
+                      compactTouchRound
+                        ? "relative p-2.5"
+                        : compactLiveRound
+                          ? "p-3"
+                          : "p-4 sm:p-5",
+                      isLiveRound && "flex h-full flex-col overflow-hidden",
+                    )}
+                  >
                     <div
                       className={clsx(
                         "flex flex-col gap-3",
                         compactTouchRound && "mb-2 gap-1.5",
-                        !isLiveRound && "mb-5 sm:flex-row sm:items-start sm:justify-between",
-                        isLiveRound && !compactLiveRound && "mb-3 sm:flex-row sm:items-start sm:justify-between",
-                        compactDesktopRound && "mb-2"
+                        hideCompactTouchHeader && "mb-1 gap-1",
+                        !isLiveRound &&
+                          "mb-5 sm:flex-row sm:items-start sm:justify-between",
+                        isLiveRound &&
+                          !compactLiveRound &&
+                          "mb-3 sm:flex-row sm:items-start sm:justify-between",
+                        compactDesktopRound && "mb-2",
                       )}
                     >
                       <div className="min-w-0">
-                        {!compactLiveRound ? <p className="eyebrow">Partie en cours</p> : null}
-                        <h3
-                          className={clsx(
-                            "font-display text-white",
-                            compactTouchRound ? "text-[1.15rem]" : "mt-2 text-3xl sm:text-4xl",
-                            compactDesktopRound && "mt-0 text-[2rem]",
-                            isLiveRound && !compactLiveRound && "text-2xl sm:text-3xl"
-                          )}
-                        >
-                          {roundTitle}
-                        </h3>
+                        {!compactLiveRound && !hideCompactTouchHeader ? (
+                          <p className="eyebrow">Partie en cours</p>
+                        ) : null}
+                        {!hideCompactTouchHeader ? (
+                          <h3
+                            className={clsx(
+                              "font-display text-white",
+                              compactTouchRound
+                                ? "text-[1.15rem]"
+                                : "mt-2 text-3xl sm:text-4xl",
+                              compactDesktopRound && "mt-0 text-[2rem]",
+                              isLiveRound &&
+                                !compactLiveRound &&
+                                "text-2xl sm:text-3xl",
+                            )}
+                          >
+                            {roundTitle}
+                          </h3>
+                        ) : null}
                         {!compactLiveRound ? (
-                          <p className={clsx("mt-2 max-w-2xl text-sm leading-6 text-slate-300", isLiveRound && "sm:max-w-xl")}>{roundSubtitle}</p>
+                          <p
+                            className={clsx(
+                              "mt-2 max-w-2xl text-sm leading-6 text-slate-300",
+                              isLiveRound && "sm:max-w-xl",
+                            )}
+                          >
+                            {roundSubtitle}
+                          </p>
                         ) : null}
                         {showInlineStatusMessage ? (
-                          <p className={clsx("mt-3 text-sm text-slate-400 md:hidden", compactTouchRound && "hidden")} aria-live="polite">
+                          <p
+                            className={clsx(
+                              "mt-3 text-sm text-slate-400 md:hidden",
+                              compactTouchRound && "hidden",
+                            )}
+                            aria-live="polite"
+                          >
                             {statusMessage}
                           </p>
                         ) : null}
@@ -1393,12 +1883,16 @@ export function PlayShell() {
                         <div className="grid gap-2 sm:min-w-40">
                           <div className="rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-3 text-right">
                             <p className="eyebrow">Score</p>
-                            <p className="number-tabular text-3xl font-semibold text-white">{localPlayer?.score ?? 0}</p>
+                            <p className="number-tabular text-3xl font-semibold text-white">
+                              {localPlayer?.score ?? 0}
+                            </p>
                           </div>
                           {liveBoardSnapshot ? (
                             <div className="rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-3 text-right">
                               <p className="eyebrow">Essais restants</p>
-                              <p className="number-tabular text-2xl font-semibold text-white">{liveBoardSnapshot.attemptsRemaining}</p>
+                              <p className="number-tabular text-2xl font-semibold text-white">
+                                {liveBoardSnapshot.attemptsRemaining}
+                              </p>
                             </div>
                           ) : null}
                         </div>
@@ -1409,16 +1903,20 @@ export function PlayShell() {
                       showCompactReveal ? (
                         <div className="mx-auto mb-3 w-full max-w-[34rem] rounded-[20px] border border-amber-300/20 bg-amber-300/10 px-3.5 py-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="eyebrow">Réponse manche {currentRoundNumber}</p>
+                            <p className="eyebrow">
+                              Réponse manche {currentRoundNumber}
+                            </p>
                             <span
                               className={clsx(
                                 "rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em]",
                                 liveBoardSnapshot?.roundSolved
                                   ? "border-lime-300/30 bg-lime-300/10 text-lime-50"
-                                  : "border-amber-200/30 bg-amber-200/10 text-amber-50"
+                                  : "border-amber-200/30 bg-amber-200/10 text-amber-50",
                               )}
                             >
-                              {liveBoardSnapshot?.roundSolved ? `+${liveBoardSnapshot.roundScore} pts` : "Non trouvé"}
+                              {liveBoardSnapshot?.roundSolved
+                                ? `+${liveBoardSnapshot.roundScore} pts`
+                                : "Non trouvé"}
                             </span>
                           </div>
                           <p className="mt-2 break-words font-display text-[1.6rem] uppercase tracking-[0.16em] text-white sm:text-[1.85rem]">
@@ -1429,15 +1927,25 @@ export function PlayShell() {
                         <div className="mx-auto mb-5 w-full max-w-[34rem] rounded-[24px] border border-amber-300/20 bg-amber-300/10 px-4 py-4">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0">
-                              <p className="eyebrow">Réponse de la manche {currentRoundNumber}</p>
+                              <p className="eyebrow">
+                                Réponse de la manche {currentRoundNumber}
+                              </p>
                               <p className="mt-2 break-words font-display text-3xl uppercase tracking-[0.18em] text-white sm:text-4xl">
                                 {revealWord}
                               </p>
                             </div>
                             <MetricBadge
                               label="Bilan"
-                              value={liveBoardSnapshot?.roundSolved ? "Trouvé" : "Raté"}
-                              tone={liveBoardSnapshot?.roundSolved ? "good" : "danger"}
+                              value={
+                                liveBoardSnapshot?.roundSolved
+                                  ? "Trouvé"
+                                  : "Raté"
+                              }
+                              tone={
+                                liveBoardSnapshot?.roundSolved
+                                  ? "good"
+                                  : "danger"
+                              }
                             />
                           </div>
                           <p className="mt-3 text-sm leading-6 text-amber-50/90">
@@ -1452,27 +1960,61 @@ export function PlayShell() {
                     <div
                       className={clsx(
                         isLiveRound && "min-h-0 flex-1",
-                        compactTouchRound && "flex items-center justify-center py-2"
+                        compactTouchRound &&
+                          (nativeKeyboardActive || compactTouchKeyboardVisible
+                            ? "flex items-start justify-center overflow-y-auto overscroll-contain pt-1 pb-2"
+                            : "flex items-center justify-center py-2"),
                       )}
-                      style={compactTouchRound ? { paddingBottom: mobilePinnedDockSpacing } : undefined}
+                      style={
+                        compactTouchRound
+                          ? { paddingBottom: mobilePinnedDockSpacing }
+                          : undefined
+                      }
                     >
                       {boardIsStale ? (
                         <div className="mx-auto w-full max-w-[34rem] rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-8 text-center">
                           <p className="eyebrow">Synchronisation</p>
-                          <p className="mt-2 font-display text-2xl text-white">Chargement du nouveau mot…</p>
-                          <p className="mt-2 text-sm text-slate-400">L’ancienne grille reste masquée jusqu’à la bonne manche.</p>
+                          <p className="mt-2 font-display text-2xl text-white">
+                            Chargement du nouveau mot…
+                          </p>
+                          <p className="mt-2 text-sm text-slate-400">
+                            L’ancienne grille reste masquée jusqu’à la bonne
+                            manche.
+                          </p>
                         </div>
                       ) : liveBoardSnapshot ? (
                         <div
                           data-play-grid
-                          className={clsx("mx-auto w-full", compactTouchRound ? "space-y-1" : denseDesktopBoard ? "space-y-1.5 sm:space-y-2" : "space-y-2 sm:space-y-3")}
+                          className={clsx(
+                            "mx-auto w-full",
+                            compactTouchRound
+                              ? nativeKeyboardActive ||
+                                compactTouchKeyboardVisible
+                                ? "space-y-0.5"
+                                : "space-y-1"
+                              : denseDesktopBoard
+                                ? "space-y-1.5 sm:space-y-2"
+                                : "space-y-2 sm:space-y-3",
+                          )}
                           style={{ maxWidth: liveBoardMaxWidth }}
                         >
                           {displayRows.map((row, rowIndex) => (
                             <div
                               key={rowIndex}
-                              className={clsx("grid", compactTouchRound ? "gap-1" : denseDesktopBoard ? "gap-1.5 sm:gap-2" : "gap-2 sm:gap-3")}
-                              style={{ gridTemplateColumns: `repeat(${liveBoardSnapshot.wordLength}, minmax(0, 1fr))` }}
+                              className={clsx(
+                                "grid",
+                                compactTouchRound
+                                  ? nativeKeyboardActive ||
+                                    compactTouchKeyboardVisible
+                                    ? "gap-0.5"
+                                    : "gap-1"
+                                  : denseDesktopBoard
+                                    ? "gap-1.5 sm:gap-2"
+                                    : "gap-2 sm:gap-3",
+                              )}
+                              style={{
+                                gridTemplateColumns: `repeat(${liveBoardSnapshot.wordLength}, minmax(0, 1fr))`,
+                              }}
                             >
                               {row.map((cell, columnIndex) => (
                                 <WordTile
@@ -1490,7 +2032,9 @@ export function PlayShell() {
                       ) : (
                         <div className="mx-auto w-full max-w-[34rem] rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-8 text-center">
                           <p className="eyebrow">Avant la manche</p>
-                          <p className="mt-2 text-sm text-slate-300">La grille arrive avec le démarrage de la manche.</p>
+                          <p className="mt-2 text-sm text-slate-300">
+                            La grille arrive avec le démarrage de la manche.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -1504,11 +2048,13 @@ export function PlayShell() {
                             ? "pointer-events-none absolute inset-x-2"
                             : prefersTouchInput
                               ? "sticky bottom-0 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
-                              : "mt-auto pt-2"
+                              : "mt-auto pt-2",
                         )}
                         style={{
                           maxWidth: liveDockMaxWidth,
-                          bottom: compactTouchRound ? `calc(${mobilePinnedDockOffset}px + 0.5rem)` : undefined
+                          bottom: compactTouchRound
+                            ? `calc(${mobilePinnedDockOffset}px + 0.5rem)`
+                            : undefined,
                         }}
                       >
                         <div
@@ -1520,10 +2066,15 @@ export function PlayShell() {
                                 : "border-white/10 bg-slate-950/96 p-3 shadow-[0_-10px_44px_rgba(0,0,0,0.5)] backdrop-blur"
                               : compactDesktopKeyboard
                                 ? "border-white/8 bg-white/[0.03] p-2 shadow-[0_18px_40px_rgba(0,0,0,0.22)]"
-                                : "border-white/8 bg-white/[0.03] p-2.5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]"
+                                : "border-white/8 bg-white/[0.03] p-2.5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]",
                           )}
                         >
-                          <div className={clsx("flex flex-col", compactDockLayout ? "gap-2" : "gap-3")}>
+                          <div
+                            className={clsx(
+                              "flex flex-col",
+                              compactDockLayout ? "gap-2" : "gap-3",
+                            )}
+                          >
                             {!compactTouchRound ? (
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="min-w-0">
@@ -1539,30 +2090,51 @@ export function PlayShell() {
                                     ) : null}
                                   </div>
                                 </div>
-                                {!prefersTouchInput && !compactDesktopRound && !compactDesktopKeyboard ? <p className="text-right text-xs leading-5 text-slate-400">{statusMessage}</p> : null}
+                                {!prefersTouchInput &&
+                                !compactDesktopRound &&
+                                !compactDesktopKeyboard ? (
+                                  <p className="text-right text-xs leading-5 text-slate-400">
+                                    {statusMessage}
+                                  </p>
+                                ) : null}
                               </div>
                             ) : null}
 
-                            <div className={clsx("flex flex-wrap gap-2", (!prefersTouchInput || compactTouchRound) && "hidden")}>
+                            <div
+                              className={clsx(
+                                "flex flex-wrap gap-2",
+                                (!prefersTouchInput || compactTouchRound) &&
+                                  "hidden",
+                              )}
+                            >
                               {feedbackLegend.map((item) => (
                                 <span
                                   key={item.key}
                                   className={clsx(
                                     "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-medium",
-                                    item.tone === "correct" && "border-lime-300/30 bg-lime-300/10 text-lime-50",
-                                    item.tone === "present" && "border-amber-300/30 bg-amber-300/10 text-amber-50",
-                                    item.tone === "hint" && "border-cyan-300/30 bg-cyan-300/10 text-cyan-50",
-                                    item.tone === "absent" && "border-slate-400/25 bg-slate-400/10 text-slate-200"
+                                    item.tone === "correct" &&
+                                      "border-lime-300/30 bg-lime-300/10 text-lime-50",
+                                    item.tone === "present" &&
+                                      "border-amber-300/30 bg-amber-300/10 text-amber-50",
+                                    item.tone === "hint" &&
+                                      "border-cyan-300/30 bg-cyan-300/10 text-cyan-50",
+                                    item.tone === "absent" &&
+                                      "border-slate-400/25 bg-slate-400/10 text-slate-200",
                                   )}
                                 >
-                                  <FeedbackToneIcon tone={item.tone} className="h-3 w-3" />
+                                  <FeedbackToneIcon
+                                    tone={item.tone}
+                                    className="h-3 w-3"
+                                  />
                                   {item.title}
                                 </span>
                               ))}
                             </div>
 
                             <form
-                              className={clsx(compactDockLayout ? "space-y-2" : "space-y-3")}
+                              className={clsx(
+                                compactDockLayout ? "space-y-2" : "space-y-3",
+                              )}
                               onSubmit={(event) => {
                                 event.preventDefault();
                                 submitGuess();
@@ -1570,7 +2142,10 @@ export function PlayShell() {
                             >
                               <input
                                 ref={guessInputRef}
-                                className={clsx("input-shell", compactDockLayout && "px-3 py-2.5 text-sm")}
+                                className={clsx(
+                                  "input-shell",
+                                  compactDockLayout && "px-3 py-2.5 text-sm",
+                                )}
                                 value={guess}
                                 onFocus={() => {
                                   setIsInputFocused(true);
@@ -1579,7 +2154,16 @@ export function PlayShell() {
                                   }
                                 }}
                                 onBlur={() => setIsInputFocused(false)}
-                                onChange={(event) => setGuess(extractEditableGuess(event.target.value, liveBoardSnapshot, blockedLetters, knownLetterLimits))}
+                                onChange={(event) =>
+                                  setGuess(
+                                    extractEditableGuess(
+                                      event.target.value,
+                                      liveBoardSnapshot,
+                                      blockedLetters,
+                                      knownLetterLimits,
+                                    ),
+                                  )
+                                }
                                 onKeyDown={(event) => {
                                   if (event.key === "Enter") {
                                     event.preventDefault();
@@ -1592,11 +2176,15 @@ export function PlayShell() {
 
                                     if (blockedLetters.has(typedLetter)) {
                                       event.preventDefault();
-                                      setStatusMessage(`"${typedLetter}" est éliminée pour cette manche.`);
+                                      setStatusMessage(
+                                        `"${typedLetter}" est éliminée pour cette manche.`,
+                                      );
                                     }
                                   }
                                 }}
-                                placeholder={createEditableGuessPlaceholder(liveBoardSnapshot)}
+                                placeholder={createEditableGuessPlaceholder(
+                                  liveBoardSnapshot,
+                                )}
                                 aria-label="Saisir les lettres restantes"
                                 autoCapitalize="characters"
                                 autoComplete="off"
@@ -1604,23 +2192,49 @@ export function PlayShell() {
                                 enterKeyHint="done"
                                 inputMode="text"
                                 maxLength={editableSlotCount}
-                                readOnly={compactTouchRound && showTouchKeyboard}
+                                readOnly={
+                                  compactTouchRound && showTouchKeyboard
+                                }
                                 spellCheck={false}
                               />
-                              <div className={clsx("grid grid-cols-3 gap-2", compactDockLayout && "gap-1.5")}>
+                              <div
+                                className={clsx(
+                                  "grid grid-cols-3 gap-2",
+                                  compactDockLayout && "gap-1.5",
+                                )}
+                              >
                                 <button
-                                  className={clsx("button-secondary w-full", compactDockLayout && "min-h-9 px-2 py-1.5 text-sm")}
+                                  className={clsx(
+                                    "button-secondary w-full",
+                                    compactDockLayout &&
+                                      "min-h-9 px-2 py-1.5 text-sm",
+                                  )}
                                   type="button"
-                                  onClick={() => roomRef.current?.send("use_clue")}
-                                  disabled={!(liveBoardSnapshot?.canUseClue ?? false)}
+                                  onClick={() =>
+                                    roomRef.current?.send("use_clue")
+                                  }
+                                  disabled={
+                                    !(liveBoardSnapshot?.canUseClue ?? false)
+                                  }
                                 >
                                   Indice
                                 </button>
-                                <button className={clsx("button-primary w-full", compactDockLayout && "min-h-9 px-2 py-1.5 text-sm")} type="submit">
+                                <button
+                                  className={clsx(
+                                    "button-primary w-full",
+                                    compactDockLayout &&
+                                      "min-h-9 px-2 py-1.5 text-sm",
+                                  )}
+                                  type="submit"
+                                >
                                   Valider
                                 </button>
                                 <button
-                                  className={clsx("button-secondary w-full", compactDockLayout && "min-h-9 px-2 py-1.5 text-sm")}
+                                  className={clsx(
+                                    "button-secondary w-full",
+                                    compactDockLayout &&
+                                      "min-h-9 px-2 py-1.5 text-sm",
+                                  )}
                                   type="button"
                                   onClick={removeLetter}
                                 >
@@ -1629,17 +2243,23 @@ export function PlayShell() {
                               </div>
                             </form>
 
-                            {compactTouchRound && fullscreenActive && !nativeKeyboardActive ? (
+                            {compactTouchRound &&
+                            fullscreenActive &&
+                            !nativeKeyboardActive ? (
                               <button
                                 className={clsx(
                                   "self-start rounded-full border px-3 py-1 text-[11px] text-slate-100 transition",
-                                  showTouchKeyboard ? "border-cyan-300/35 bg-cyan-300/12 text-cyan-50" : "border-white/10 bg-white/[0.04]"
+                                  showTouchKeyboard
+                                    ? "border-cyan-300/35 bg-cyan-300/12 text-cyan-50"
+                                    : "border-white/10 bg-white/[0.04]",
                                 )}
                                 type="button"
                                 onClick={() => {
                                   if (showTouchKeyboard) {
                                     setShowTouchKeyboard(false);
-                                    guessInputRef.current?.focus({ preventScroll: true });
+                                    guessInputRef.current?.focus({
+                                      preventScroll: true,
+                                    });
                                     return;
                                   }
 
@@ -1655,17 +2275,27 @@ export function PlayShell() {
                             {showVirtualKeyboard ? (
                               <div
                                 className={clsx(
-                                  compactTouchRound || compactDesktopKeyboard ? "space-y-1 overflow-hidden" : "space-y-1.5 overflow-hidden sm:space-y-2",
-                                  isInputFocused && prefersTouchInput && "hidden"
+                                  compactTouchRound || compactDesktopKeyboard
+                                    ? "space-y-1 overflow-hidden"
+                                    : "space-y-1.5 overflow-hidden sm:space-y-2",
+                                  isInputFocused &&
+                                    prefersTouchInput &&
+                                    "hidden",
                                 )}
                               >
                                 {keyboardRows.map((row) => (
                                   <div
                                     key={row}
-                                    className={clsx("mx-auto grid", compactTouchRound || compactDesktopKeyboard ? "gap-1" : "gap-1.5 sm:gap-2")}
+                                    className={clsx(
+                                      "mx-auto grid",
+                                      compactTouchRound ||
+                                        compactDesktopKeyboard
+                                        ? "gap-1"
+                                        : "gap-1.5 sm:gap-2",
+                                    )}
                                     style={{
                                       gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
-                                      maxWidth: virtualKeyboardMaxWidth
+                                      maxWidth: virtualKeyboardMaxWidth,
                                     }}
                                   >
                                     {row.split("").map((letter) => {
@@ -1674,14 +2304,20 @@ export function PlayShell() {
                                       return (
                                         <button
                                           key={letter}
-                                          aria-label={getKeyboardAriaLabel(letter)}
-                                          className={getKeyboardButtonClass(tone)}
+                                          aria-label={getKeyboardAriaLabel(
+                                            letter,
+                                          )}
+                                          className={getKeyboardButtonClass(
+                                            tone,
+                                          )}
                                           disabled={blockedLetters.has(letter)}
                                           type="button"
                                           onClick={() => appendLetter(letter)}
                                         >
                                           {renderKeyboardToneDecor(tone)}
-                                          <span className="relative z-10">{letter}</span>
+                                          <span className="relative z-10">
+                                            {letter}
+                                          </span>
                                         </button>
                                       );
                                     })}
@@ -1694,15 +2330,27 @@ export function PlayShell() {
                       </div>
                     )}
 
-                    {roomPhase === "lobby" || roomPhase === "queue" || roomPhase === "countdown" ? (
+                    {roomPhase === "lobby" ||
+                    roomPhase === "queue" ||
+                    roomPhase === "countdown" ? (
                       <div className="mt-5 flex flex-wrap gap-3">
                         {roomSnapshot.roomKind === "private" && (
                           <>
-                            <button className="button-secondary w-full sm:w-auto" onClick={() => roomRef.current?.send("set_ready")}>
-                              {localPlayer?.status === "ready" ? "Retirer mon prêt" : "Je suis prêt"}
+                            <button
+                              className="button-secondary w-full sm:w-auto"
+                              onClick={() => roomRef.current?.send("set_ready")}
+                            >
+                              {localPlayer?.status === "ready"
+                                ? "Retirer mon prêt"
+                                : "Je suis prêt"}
                             </button>
                             {sessionUser?.id === roomSnapshot.hostUserId && (
-                              <button className="button-primary w-full sm:w-auto" onClick={() => roomRef.current?.send("start_match")}>
+                              <button
+                                className="button-primary w-full sm:w-auto"
+                                onClick={() =>
+                                  roomRef.current?.send("start_match")
+                                }
+                              >
                                 Lancer la partie
                               </button>
                             )}
@@ -1717,27 +2365,52 @@ export function PlayShell() {
                   className={clsx(
                     "grid min-w-0 gap-5",
                     compactTouchRound && "hidden",
-                    lockedSidebarToDesktop ? "hidden xl:grid xl:self-start xl:sticky xl:top-4 xl:grid-cols-1 xl:gap-4" : "lg:grid-cols-2 xl:sticky xl:top-6 xl:grid-cols-1"
+                    lockedSidebarToDesktop
+                      ? "hidden lg:grid lg:self-start lg:sticky lg:top-4 lg:grid-cols-1 lg:gap-4"
+                      : "lg:grid-cols-2 xl:sticky xl:top-6 xl:grid-cols-1",
                   )}
                 >
-                  <div className={clsx("hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block", isLiveRound && "xl:hidden")}>
+                  <div
+                    className={clsx(
+                      "hidden rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5 xl:block",
+                      isLiveRound && "xl:hidden",
+                    )}
+                  >
                     <p className="eyebrow">Session</p>
-                    <h3 className="mt-3 break-words font-display text-2xl text-white sm:text-3xl">{sessionUser?.name}</h3>
-                    <p className="mt-2 break-all text-sm text-slate-300">{sessionUser?.email}</p>
+                    <h3 className="mt-3 break-words font-display text-2xl text-white sm:text-3xl">
+                      {sessionUser?.name}
+                    </h3>
+                    <p className="mt-2 break-all text-sm text-slate-300">
+                      {sessionUser?.email}
+                    </p>
                     <div className="mt-5 flex flex-wrap gap-2 sm:gap-3">
-                      <MetricBadge label="Type" value={sessionUser?.isAnonymous ? "Invité" : "Compte"} />
+                      <MetricBadge
+                        label="Type"
+                        value={sessionUser?.isAnonymous ? "Invité" : "Compte"}
+                      />
                       <MetricBadge label="Salon" value="Connecté" tone="good" />
                     </div>
                   </div>
 
                   {isLiveRound ? (
-                    <div className="rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
+                    <div
+                      className={clsx(
+                        "rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5",
+                        lockedSidebarToDesktop && "hidden xl:block",
+                      )}
+                    >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           <p className="eyebrow">Lettres éliminées</p>
-                          <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">Ardoise totale</h3>
+                          <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">
+                            Ardoise totale
+                          </h3>
                         </div>
-                        <MetricBadge label="Total" value={eliminatedLetters.length} tone="danger" />
+                        <MetricBadge
+                          label="Total"
+                          value={eliminatedLetters.length}
+                          tone="danger"
+                        />
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
@@ -1751,7 +2424,9 @@ export function PlayShell() {
                             </span>
                           ))
                         ) : (
-                          <p className="text-sm leading-6 text-slate-400">Aucune lettre totalement éliminée.</p>
+                          <p className="text-sm leading-6 text-slate-400">
+                            Aucune lettre totalement éliminée.
+                          </p>
                         )}
                       </div>
                     </div>
@@ -1760,16 +2435,30 @@ export function PlayShell() {
                       <p className="eyebrow">Repères</p>
                       <div className="mt-4 space-y-3">
                         {feedbackLegend.map((item) => (
-                          <div key={item.key} className="flex items-start gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3">
+                          <div
+                            key={item.key}
+                            className="flex items-start gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3"
+                          >
                             <div className="w-11 shrink-0">
-                              <WordTile letter={item.letter} state={item.state} hint={item.hint} />
+                              <WordTile
+                                letter={item.letter}
+                                state={item.state}
+                                hint={item.hint}
+                              />
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <FeedbackToneIcon tone={item.tone} className="h-3.5 w-3.5 text-slate-200" />
-                                <p className="text-sm font-medium text-white">{item.title}</p>
+                                <FeedbackToneIcon
+                                  tone={item.tone}
+                                  className="h-3.5 w-3.5 text-slate-200"
+                                />
+                                <p className="text-sm font-medium text-white">
+                                  {item.title}
+                                </p>
                               </div>
-                              <p className="mt-1 text-xs leading-5 text-slate-400">{item.body}</p>
+                              <p className="mt-1 text-xs leading-5 text-slate-400">
+                                {item.body}
+                              </p>
                             </div>
                           </div>
                         ))}
@@ -1780,61 +2469,108 @@ export function PlayShell() {
                   <div
                     className={clsx(
                       "rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5",
-                      lockedSidebarToDesktop && "flex max-h-[calc(100dvh-15rem)] flex-col overflow-hidden"
+                      lockedSidebarToDesktop &&
+                        "flex max-h-[calc(100dvh-15rem)] flex-col overflow-hidden",
                     )}
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="eyebrow">Classement</p>
-                        <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">{lockedSidebarToDesktop ? "Positions" : "Classement live"}</h3>
+                        <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">
+                          {lockedSidebarToDesktop
+                            ? "Positions"
+                            : "Classement live"}
+                        </h3>
                       </div>
-                      <MetricBadge label="Joueurs" value={deferredSnapshot?.players.length ?? roomSnapshot.players.length} />
+                      <MetricBadge
+                        label="Joueurs"
+                        value={
+                          deferredSnapshot?.players.length ??
+                          roomSnapshot.players.length
+                        }
+                        compact={lockedSidebarToDesktop}
+                      />
                     </div>
 
-                    <div className={clsx("mt-5 space-y-3", lockedSidebarToDesktop && "flex-1 overflow-y-auto pr-1")}>
-                      {(deferredSnapshot?.players ?? roomSnapshot.players).map((player, index) => (
-                        <div
-                          key={player.userId}
-                          className={clsx(
-                            "rounded-[22px] border px-4 py-3 transition",
-                            lockedSidebarToDesktop && "px-3 py-2.5",
-                            player.userId === sessionUser?.id ? "border-cyan-300/35 bg-cyan-300/10" : "border-white/8 bg-white/[0.03]"
-                          )}
-                        >
-                          <div className={clsx("flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between", lockedSidebarToDesktop && "gap-2")}>
-                            <div className="min-w-0 flex items-center gap-3">
-                              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-950/80 text-sm text-white">
-                                #{index + 1}
-                              </span>
-                              <div className="min-w-0">
-                                <p className="break-words font-medium text-white">{player.name}</p>
-                                <p className="text-xs uppercase tracking-[0.24em] text-slate-400">{getPlayerStatusLabel(player.status)}</p>
+                    <div
+                      className={clsx(
+                        "mt-5 space-y-3",
+                        lockedSidebarToDesktop && "flex-1 overflow-y-auto pr-1",
+                      )}
+                    >
+                      {(deferredSnapshot?.players ?? roomSnapshot.players).map(
+                        (player, index) => (
+                          <div
+                            key={player.userId}
+                            className={clsx(
+                              "rounded-[22px] border px-4 py-3 transition",
+                              lockedSidebarToDesktop && "px-3 py-2.5",
+                              player.userId === sessionUser?.id
+                                ? "border-cyan-300/35 bg-cyan-300/10"
+                                : "border-white/8 bg-white/[0.03]",
+                            )}
+                          >
+                            <div
+                              className={clsx(
+                                "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
+                                lockedSidebarToDesktop && "gap-2",
+                              )}
+                            >
+                              <div className="min-w-0 flex items-center gap-3">
+                                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-950/80 text-sm text-white">
+                                  #{index + 1}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="break-words font-medium text-white">
+                                    {player.name}
+                                  </p>
+                                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
+                                    {getPlayerStatusLabel(player.status)}
+                                  </p>
+                                </div>
                               </div>
+                              <span className="number-tabular text-sm text-slate-200">
+                                {player.score} pts
+                              </span>
                             </div>
-                            <span className="number-tabular text-sm text-slate-200">{player.score} pts</span>
                           </div>
-                        </div>
-                      ))}
+                        ),
+                      )}
                     </div>
                   </div>
 
-                  <div className={clsx("rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5", isLiveRound && "hidden")}>
+                  <div
+                    className={clsx(
+                      "rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5",
+                      isLiveRound && "hidden",
+                    )}
+                  >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="eyebrow">État du match</p>
-                        <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">{matchInfoTitle}</h3>
+                        <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">
+                          {matchInfoTitle}
+                        </h3>
                       </div>
                       <MetricBadge label="Statut" value={localStatusLabel} />
                     </div>
-                    <p className="mt-4 text-sm leading-6 text-slate-200" aria-live="polite">
+                    <p
+                      className="mt-4 text-sm leading-6 text-slate-200"
+                      aria-live="polite"
+                    >
                       {matchInfoBody}
                     </p>
 
                     <div className="mt-5 grid gap-3 sm:grid-cols-3">
                       {matchInfoStats.map((item) => (
-                        <div key={item.label} className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                        <div
+                          key={item.label}
+                          className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3"
+                        >
                           <p className="eyebrow">{item.label}</p>
-                          <p className="mt-2 text-lg font-medium text-white">{item.value}</p>
+                          <p className="mt-2 text-lg font-medium text-white">
+                            {item.value}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -1842,7 +2578,9 @@ export function PlayShell() {
                     {showSystemStatusNote ? (
                       <div className="mt-5 rounded-[20px] border border-white/8 bg-slate-950/40 px-4 py-3">
                         <p className="eyebrow">Retour système</p>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">{statusMessage}</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-300">
+                          {statusMessage}
+                        </p>
                       </div>
                     ) : null}
 
@@ -1850,12 +2588,17 @@ export function PlayShell() {
                       <div className="mt-5 space-y-3">
                         <p className="eyebrow">Podium</p>
                         {matchSummary.players.slice(0, 3).map((player) => (
-                          <div key={player.userId} className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                          <div
+                            key={player.userId}
+                            className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3"
+                          >
                             <div className="flex items-center justify-between">
                               <span className="font-medium text-white">
                                 #{player.placement} {player.name}
                               </span>
-                              <span className="number-tabular text-sm text-slate-200">{player.score}</span>
+                              <span className="number-tabular text-sm text-slate-200">
+                                {player.score}
+                              </span>
                             </div>
                           </div>
                         ))}
@@ -1867,7 +2610,7 @@ export function PlayShell() {
                             onClick={() =>
                               void connectToRoom("/api/game/public-ticket", {
                                 action: "public",
-                                pendingMessage: "Recherche d’un match public…"
+                                pendingMessage: "Recherche d’un match public…",
                               })
                             }
                           >
@@ -1879,7 +2622,7 @@ export function PlayShell() {
                             onClick={() =>
                               void connectToRoom("/api/game/private-ticket", {
                                 action: "private",
-                                pendingMessage: "Création du salon privé…"
+                                pendingMessage: "Création du salon privé…",
                               })
                             }
                           >
@@ -1901,19 +2644,43 @@ export function PlayShell() {
                 <h3 className="mt-3 break-words font-display text-2xl text-white sm:text-3xl">
                   {sessionUser?.name ?? "Aucune session"}
                 </h3>
-                <p className="mt-2 break-all text-sm text-slate-300">{sessionUser?.email ?? "Passe par invité ou email."}</p>
+                <p className="mt-2 break-all text-sm text-slate-300">
+                  {sessionUser?.email ?? "Passe par invité ou email."}
+                </p>
                 <div className="mt-5 flex flex-wrap gap-2 sm:gap-3">
-                  <MetricBadge label="Type" value={sessionUser?.isAnonymous ? "Invité" : sessionUser ? "Compte" : "Aucune"} />
-                  <MetricBadge label="Partie" value={roomSnapshot ? "Connecté" : "En attente"} tone={roomSnapshot ? "good" : "default"} />
+                  <MetricBadge
+                    label="Type"
+                    value={
+                      sessionUser?.isAnonymous
+                        ? "Invité"
+                        : sessionUser
+                          ? "Compte"
+                          : "Aucune"
+                    }
+                  />
+                  <MetricBadge
+                    label="Partie"
+                    value={roomSnapshot ? "Connecté" : "En attente"}
+                    tone={roomSnapshot ? "good" : "default"}
+                  />
                 </div>
               </div>
 
               <div className="rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
                 <p className="eyebrow">Règles</p>
                 <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-300">
-                  <li>1. Tout le monde reçoit le même mot, avec des lettres déjà révélées verrouillées en cyan.</li>
-                  <li>2. Vert = bonne lettre au bon endroit, ambre = bonne lettre ailleurs, ardoise = lettre absente.</li>
-                  <li>3. Le score récompense la résolution, la vitesse et la propreté, puis la finale départage le top 4.</li>
+                  <li>
+                    1. Tout le monde reçoit le même mot, avec des lettres déjà
+                    révélées verrouillées en cyan.
+                  </li>
+                  <li>
+                    2. Vert = bonne lettre au bon endroit, ambre = bonne lettre
+                    ailleurs, ardoise = lettre absente.
+                  </li>
+                  <li>
+                    3. Le score récompense la résolution, la vitesse et la
+                    propreté, puis la finale départage le top 4.
+                  </li>
                 </ul>
               </div>
             </div>
