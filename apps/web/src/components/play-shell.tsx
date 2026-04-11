@@ -429,6 +429,8 @@ export function PlayShell() {
   );
   const phaseBadgeValue = getPhaseBadgeValue(roomPhase);
   const fullscreenActive = isFullscreen || isPseudoFullscreen;
+  const hideWaitingRosterPanel =
+    showWaitingRoster && prefersTouchInput && fullscreenActive;
   const shortTouchViewport =
     prefersTouchInput && viewportHeight > 0 && viewportHeight <= 760;
   const compactTouchRoomShell =
@@ -472,13 +474,13 @@ export function PlayShell() {
     (fullscreenActive ||
       compactDesktopRound ||
       (viewportHeight > 0 && viewportHeight <= 920));
+  const fullscreenDesktopKeyboardLayout =
+    compactDesktopKeyboard && fullscreenActive;
   const desktopKeyboardExpandsPage =
     desktopVisualKeyboardOpen && !fullscreenActive;
   const compactDockLayout = compactTouchRound || compactDesktopKeyboard;
   const denseDesktopBoard =
-    isLiveRound &&
-    !prefersTouchInput &&
-    (compactDesktopRound || (compactDesktopKeyboard && fullscreenActive));
+    isLiveRound && !prefersTouchInput && compactDesktopRound;
   const compactLiveRound =
     compactTouchRound ||
     compactDesktopRound ||
@@ -497,6 +499,11 @@ export function PlayShell() {
     prefersTouchInput || compactLiveRound || lockedSidebarToDesktop;
   const hideCompactTouchHeader =
     compactTouchRound && (nativeKeyboardActive || compactTouchKeyboardVisible);
+  const showCompactMobileEliminatedLetters =
+    isLiveRound &&
+    prefersTouchInput &&
+    !showTouchKeyboard &&
+    !nativeKeyboardActive;
   const roomCodeLabel = roomSnapshot?.roomCode ?? "Public";
   const roomStatusLabel =
     roomSnapshot?.roomKind === "private" && roomPhase !== "queue"
@@ -563,19 +570,15 @@ export function PlayShell() {
   const liveBoardMaxWidth = isLiveRound
     ? prefersTouchInput
       ? fullscreenActive
-        ? nativeKeyboardActive
-          ? "min(100%, 15.75rem)"
-          : compactTouchKeyboardVisible
-            ? "min(100%, 16.5rem)"
-            : shortTouchViewport
-              ? "min(100%, 17.5rem)"
-              : "min(100%, 18.5rem)"
+        ? shortTouchViewport
+          ? "min(100%, 17.25rem)"
+          : "min(100%, 18.5rem)"
         : shortTouchViewport
           ? "min(100%, 17rem)"
           : "min(100%, 18rem)"
       : compactDesktopKeyboard
         ? fullscreenActive
-          ? "max(16rem, min(18.5rem, calc(100dvh - 27rem)))"
+          ? "min(100%, 27rem)"
           : "min(100%, 27rem)"
         : compactDesktopRound
           ? "max(17rem, min(20rem, calc(100dvh - 23rem)))"
@@ -590,27 +593,29 @@ export function PlayShell() {
   const liveDockMaxWidth = isLiveRound
     ? prefersTouchInput
       ? fullscreenActive
-        ? nativeKeyboardActive
-          ? "min(100%, 18.5rem)"
-          : compactTouchKeyboardVisible
-            ? "min(100%, 19rem)"
-            : "min(100%, 20rem)"
+        ? shortTouchViewport
+          ? "min(100%, 19rem)"
+          : "min(100%, 20rem)"
         : "min(100%, 18.5rem)"
       : compactDesktopKeyboard
         ? fullscreenActive
-          ? "min(100%, 24rem)"
+          ? "min(100%, 36rem)"
           : "min(100%, 31rem)"
         : compactDesktopRound
           ? "max(18rem, min(24rem, calc(100dvh - 19rem)))"
           : "max(22rem, min(31rem, calc(100dvh - 21rem)))"
     : "34rem";
   const virtualKeyboardMaxWidth = compactTouchKeyboardVisible
-    ? "min(100%, 17.5rem)"
+    ? shortTouchViewport
+      ? "min(100%, 19rem)"
+      : "min(100%, 20rem)"
     : compactTouchRound
-      ? "min(100%, 18.5rem)"
+      ? shortTouchViewport
+        ? "min(100%, 19rem)"
+        : "min(100%, 20rem)"
       : compactDesktopKeyboard
         ? fullscreenActive
-          ? "min(100%, 24rem)"
+          ? "min(100%, 36rem)"
           : "min(100%, 31rem)"
         : "34rem";
   const mobilePinnedDockSpacing = mobilePinnedDock
@@ -689,7 +694,7 @@ export function PlayShell() {
   useEffect(() => {
     const liveDockElement = liveDockRef.current;
 
-    if (!liveDockElement || !mobilePinnedDock) {
+    if (!liveDockElement || !isLiveRound) {
       setLiveDockHeight(0);
       return;
     }
@@ -715,7 +720,7 @@ export function PlayShell() {
     return () => {
       observer.disconnect();
     };
-  }, [mobilePinnedDock]);
+  }, [isLiveRound, mobilePinnedDock, showVirtualKeyboard]);
 
   useEffect(() => {
     const syncFullscreenSupport = () => {
@@ -1954,6 +1959,9 @@ export function PlayShell() {
                           ? "p-3"
                           : "p-4 sm:p-5",
                       isLiveRound &&
+                        fullscreenDesktopKeyboardLayout &&
+                        "flex-1",
+                      isLiveRound &&
                         (desktopKeyboardExpandsPage
                           ? "flex flex-col"
                           : "flex h-full flex-col overflow-hidden"),
@@ -2046,6 +2054,13 @@ export function PlayShell() {
                             ) : null}
                           </div>
                         ) : null}
+                        {hideWaitingRosterPanel ? (
+                          <p className="mt-4 text-sm leading-6 text-slate-300">
+                            {roomPlayerCount > 1
+                              ? `${roomPlayerCount} joueurs ont rejoint le salon. La liste détaillée reste masquée en plein écran mobile pour garder la zone principale lisible.`
+                              : "Tu es seul dans le salon pour l’instant. L’écran garde uniquement les compteurs utiles tant que personne d’autre n’a rejoint."}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
 
@@ -2112,7 +2127,9 @@ export function PlayShell() {
                         isLiveRound &&
                           (desktopKeyboardExpandsPage
                             ? "pt-1"
-                            : "min-h-0 flex-1"),
+                            : fullscreenDesktopKeyboardLayout
+                              ? "min-h-0 flex flex-1 items-center justify-center pb-3"
+                              : "min-h-0 flex-1"),
                         compactTouchRound &&
                           (nativeKeyboardActive || compactTouchKeyboardVisible
                             ? "flex items-start justify-center overflow-y-auto overscroll-contain pt-1 pb-2"
@@ -2285,6 +2302,12 @@ export function PlayShell() {
                                 </span>
                               ))}
                             </div>
+
+                            {showCompactMobileEliminatedLetters ? (
+                              <CompactEliminatedLettersStrip
+                                letters={eliminatedLetters}
+                              />
+                            ) : null}
 
                             <form
                               className={clsx(
@@ -2565,7 +2588,7 @@ export function PlayShell() {
                     </div>
                   ) : null}
 
-                  {showWaitingRoster ? (
+                  {showWaitingRoster && !hideWaitingRosterPanel ? (
                     <PlayerListPanel
                       eyebrow={
                         roomSnapshot.roomKind === "private"
@@ -2791,6 +2814,41 @@ function InlineMetaPill(props: {
   );
 }
 
+function CompactEliminatedLettersStrip(props: {
+  readonly letters: readonly string[];
+}) {
+  return (
+    <div className="rounded-[18px] border border-white/10 bg-white/[0.04] px-3 py-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="eyebrow">Ardoise</p>
+          <p className="mt-1 text-xs leading-5 text-slate-300">
+            {props.letters.length
+              ? "Lettres éliminées confirmées."
+              : "Aucune lettre totalement éliminée pour l’instant."}
+          </p>
+        </div>
+        <span className="rounded-full border border-slate-400/20 bg-slate-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-100">
+          {props.letters.length}
+        </span>
+      </div>
+
+      {props.letters.length ? (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {props.letters.map((letter) => (
+            <span
+              key={letter}
+              className="inline-flex h-9 min-w-9 items-center justify-center rounded-full border border-slate-400/25 bg-slate-400/10 px-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100"
+            >
+              {letter}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function PlayerListPanel(props: {
   readonly eyebrow: string;
   readonly title: string;
@@ -2804,7 +2862,7 @@ function PlayerListPanel(props: {
 }) {
   return (
     <div className="rounded-[28px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="eyebrow">{props.eyebrow}</p>
           <h3 className="mt-2 font-display text-2xl text-white sm:text-3xl">
