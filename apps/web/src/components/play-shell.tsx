@@ -314,6 +314,7 @@ export function PlayShell() {
   const previousBoardRef = useRef<BoardSnapshot | null>(null);
   const previousPlayerStatusRef = useRef<string | null>(null);
   const playSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const stableTouchViewportHeightRef = useRef(0);
   const [prefersTouchInput, setPrefersTouchInput] = useState(false);
   const [showDesktopKeyboard, setShowDesktopKeyboard] = useState(false);
   const [showTouchKeyboard, setShowTouchKeyboard] = useState(false);
@@ -487,18 +488,28 @@ export function PlayShell() {
     (compactDesktopKeyboard && fullscreenActive);
   const canToggleFullscreen = isFullscreenSupported || prefersTouchInput;
   const nativeKeyboardInset = prefersTouchInput ? viewportInsetBottom : 0;
+  const touchViewportKeyboardDrop =
+    prefersTouchInput && stableTouchViewportHeightRef.current > 0
+      ? Math.max(0, stableTouchViewportHeightRef.current - viewportHeight)
+      : 0;
   const nativeKeyboardActive =
     isLiveRound &&
     prefersTouchInput &&
     isInputFocused &&
     !showTouchKeyboard &&
-    nativeKeyboardInset > 0;
+    (nativeKeyboardInset > 0 || touchViewportKeyboardDrop > 120);
   const dockKeyboardInset = fullscreenActive ? 0 : nativeKeyboardInset;
   const mobilePinnedDock = isLiveRound && prefersTouchInput;
   const compactMetricStrip =
     prefersTouchInput || compactLiveRound || lockedSidebarToDesktop;
   const hideCompactTouchHeader =
     compactTouchRound && (nativeKeyboardActive || compactTouchKeyboardVisible);
+  const showCompactTouchExitButton =
+    compactTouchRound &&
+    fullscreenActive &&
+    canToggleFullscreen &&
+    !nativeKeyboardActive &&
+    !showTouchKeyboard;
   const showCompactMobileEliminatedLetters =
     isLiveRound &&
     prefersTouchInput &&
@@ -570,9 +581,13 @@ export function PlayShell() {
   const liveBoardMaxWidth = isLiveRound
     ? prefersTouchInput
       ? fullscreenActive
-        ? shortTouchViewport
-          ? "min(100%, 17.25rem)"
-          : "min(100%, 18.5rem)"
+        ? nativeKeyboardActive
+          ? shortTouchViewport
+            ? "min(100%, 15.5rem)"
+            : "min(100%, 16.25rem)"
+          : shortTouchViewport
+            ? "min(100%, 17.25rem)"
+            : "min(100%, 18.5rem)"
         : shortTouchViewport
           ? "min(100%, 17rem)"
           : "min(100%, 18rem)"
@@ -690,6 +705,29 @@ export function PlayShell() {
       );
     };
   }, []);
+
+  useEffect(() => {
+    if (!prefersTouchInput || viewportHeight <= 0) {
+      return;
+    }
+
+    const keyboardLikelyOpen =
+      isInputFocused &&
+      !showTouchKeyboard &&
+      (viewportInsetBottom > 0 ||
+        (stableTouchViewportHeightRef.current > 0 &&
+          stableTouchViewportHeightRef.current - viewportHeight > 120));
+
+    if (!keyboardLikelyOpen) {
+      stableTouchViewportHeightRef.current = viewportHeight;
+    }
+  }, [
+    isInputFocused,
+    prefersTouchInput,
+    showTouchKeyboard,
+    viewportHeight,
+    viewportInsetBottom,
+  ]);
 
   useEffect(() => {
     const liveDockElement = liveDockRef.current;
@@ -1922,16 +1960,19 @@ export function PlayShell() {
                       />
                     ) : null}
                     {canToggleFullscreen ? (
-                      <button
-                        className={clsx(
-                          "button-secondary min-h-10 px-3 py-2 text-sm",
-                          compactMetricStrip && "min-h-9 px-2.5 py-1.5 text-xs",
-                        )}
-                        type="button"
-                        onClick={() => void toggleFullscreen()}
-                      >
-                        {fullscreenButtonLabel}
-                      </button>
+                      !(compactTouchRound && fullscreenActive) ? (
+                        <button
+                          className={clsx(
+                            "button-secondary min-h-10 px-3 py-2 text-sm",
+                            compactMetricStrip &&
+                              "min-h-9 px-2.5 py-1.5 text-xs",
+                          )}
+                          type="button"
+                          onClick={() => void toggleFullscreen()}
+                        >
+                          {fullscreenButtonLabel}
+                        </button>
+                      ) : null
                     ) : null}
                     {isLiveRound && !prefersTouchInput ? (
                       <button
@@ -1971,6 +2012,7 @@ export function PlayShell() {
                       className={clsx(
                         "flex flex-col gap-3",
                         compactTouchRound && "mb-2 gap-1.5",
+                        hideCompactTouchHeader && "hidden",
                         hideCompactTouchHeader && "mb-1 gap-1",
                         !isLiveRound &&
                           "mb-5 sm:flex-row sm:items-start sm:justify-between",
@@ -2421,33 +2463,38 @@ export function PlayShell() {
                               </div>
                             </form>
 
-                            {compactTouchRound &&
-                            fullscreenActive &&
-                            !nativeKeyboardActive ? (
-                              <button
+                            {compactTouchRound && fullscreenActive ? (
+                              <div
                                 className={clsx(
-                                  "self-start rounded-full border px-3 py-1 text-[11px] text-slate-100 transition",
-                                  showTouchKeyboard
-                                    ? "border-cyan-300/35 bg-cyan-300/12 text-cyan-50"
-                                    : "border-white/10 bg-white/[0.04]",
+                                  "flex items-center justify-start gap-2",
+                                  nativeKeyboardActive && "hidden",
                                 )}
-                                type="button"
-                                onClick={() => {
-                                  if (showTouchKeyboard) {
-                                    setShowTouchKeyboard(false);
-                                    guessInputRef.current?.focus({
-                                      preventScroll: true,
-                                    });
-                                    return;
-                                  }
-
-                                  guessInputRef.current?.blur();
-                                  setShowTouchKeyboard(true);
-                                }}
-                                aria-pressed={showTouchKeyboard}
                               >
-                                {touchKeyboardToggleLabel}
-                              </button>
+                                <button
+                                  className={clsx(
+                                    "rounded-full border px-3 py-1 text-[11px] text-slate-100 transition",
+                                    showTouchKeyboard
+                                      ? "border-cyan-300/35 bg-cyan-300/12 text-cyan-50"
+                                      : "border-white/10 bg-white/[0.04]",
+                                  )}
+                                  type="button"
+                                  onClick={() => {
+                                    if (showTouchKeyboard) {
+                                      setShowTouchKeyboard(false);
+                                      guessInputRef.current?.focus({
+                                        preventScroll: true,
+                                      });
+                                      return;
+                                    }
+
+                                    guessInputRef.current?.blur();
+                                    setShowTouchKeyboard(true);
+                                  }}
+                                  aria-pressed={showTouchKeyboard}
+                                >
+                                  {touchKeyboardToggleLabel}
+                                </button>
+                              </div>
                             ) : null}
 
                             {showVirtualKeyboard ? (
@@ -2507,6 +2554,19 @@ export function PlayShell() {
                         </div>
                       </div>
                     )}
+
+                    {showCompactTouchExitButton ? (
+                      <button
+                        className="pointer-events-auto absolute right-2.5 z-40 rounded-full border border-white/10 bg-slate-950/92 px-3 py-1.5 text-[11px] text-slate-100 shadow-[0_10px_24px_rgba(0,0,0,0.32)] backdrop-blur transition hover:border-white/15 hover:bg-slate-900"
+                        type="button"
+                        onClick={() => void toggleFullscreen()}
+                        style={{
+                          bottom: `calc(${mobilePinnedDockOffset}px + ${liveDockHeight + 10}px)`,
+                        }}
+                      >
+                        Quitter
+                      </button>
+                    ) : null}
 
                     {roomPhase === "lobby" ||
                     roomPhase === "queue" ||
