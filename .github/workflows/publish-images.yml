@@ -56,13 +56,19 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ matrix.name }}" == "web" ]]; then
+            : "${NEXT_PUBLIC_APP_URL:?Set NEXT_PUBLIC_APP_URL repository variable}"
+            : "${NEXT_PUBLIC_GAME_WS_URL:?Set NEXT_PUBLIC_GAME_WS_URL repository variable}"
+            : "${PASSKEY_RP_ID:?Set PASSKEY_RP_ID repository variable}"
+            : "${PASSKEY_ORIGIN:?Set PASSKEY_ORIGIN repository variable}"
+            PASSKEY_ORIGINS_VALUE="${PASSKEY_ORIGINS:-$PASSKEY_ORIGIN}"
+
             {
               echo 'args<<ARGS'
-              echo "NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://play-dev.raphcvr.me}"
-              echo "NEXT_PUBLIC_GAME_WS_URL=${NEXT_PUBLIC_GAME_WS_URL:-wss://rt-dev.raphcvr.me}"
-              echo "PASSKEY_RP_ID=${PASSKEY_RP_ID:-play-dev.raphcvr.me}"
-              echo "PASSKEY_ORIGIN=${PASSKEY_ORIGIN:-https://play-dev.raphcvr.me}"
-              echo "PASSKEY_ORIGINS=${PASSKEY_ORIGINS:-}"
+              echo "NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}"
+              echo "NEXT_PUBLIC_GAME_WS_URL=${NEXT_PUBLIC_GAME_WS_URL}"
+              echo "PASSKEY_RP_ID=${PASSKEY_RP_ID}"
+              echo "PASSKEY_ORIGIN=${PASSKEY_ORIGIN}"
+              echo "PASSKEY_ORIGINS=${PASSKEY_ORIGINS_VALUE}"
               echo 'ARGS'
             } >> "$GITHUB_OUTPUT"
           else
