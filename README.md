@@ -44,7 +44,7 @@ docker compose up -d postgres redis game web caddy
 
 Published host ports are loopback-only (`127.0.0.1`) so the stack stays reachable from your machine and `cloudflared`, but not from the LAN.
 
-If you change `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_GAME_WS_URL`, `PASSKEY_RP_ID`, or `PASSKEY_ORIGIN`, rebuild the `web` image before restarting it:
+If you change `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_GAME_WS_URL`, `PASSKEY_RP_ID`, `PASSKEY_ORIGIN`, or `PASSKEY_ORIGINS`, rebuild the `web` image before restarting it:
 
 ```powershell
 docker compose build web
@@ -82,6 +82,7 @@ Important variables:
 - `RT_ORIGIN_SERVICE`
 - `PASSKEY_RP_ID`
 - `PASSKEY_ORIGIN`
+- `PASSKEY_ORIGINS`
 
 ## Cloudflared Preview
 

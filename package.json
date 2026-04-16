@@ -11,6 +11,7 @@
     "dev": "node ./scripts/dev.mjs",
     "dev:web": "corepack pnpm --filter @motus/web dev",
     "dev:game": "corepack pnpm --filter @motus/game dev",
+    "dictionary:generate:lexique": "node ./scripts/generate-lexique-solution-bank.mjs",
     "docker:build": "docker compose build web game",
     "docker:down": "docker compose down",
     "docker:up": "docker compose up -d postgres redis game web caddy",

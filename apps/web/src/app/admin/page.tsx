@@ -1,4 +1,7 @@
-import { getDictionaryStats } from "@motus/dictionary/word-bank";
+import {
+  getDictionaryStats,
+  type DictionarySourceStat,
+} from "@motus/dictionary/word-bank";
 import { GlassPanel, SectionHeader } from "@motus/ui";
 
 import { env } from "@/lib/env";
@@ -13,7 +16,7 @@ export default function AdminPage() {
     ["Game WS", env.NEXT_PUBLIC_GAME_WS_URL],
     ["Game Internal", env.GAME_SERVER_INTERNAL_URL],
     ["Passkey RP ID", env.PASSKEY_RP_ID],
-    ["Passkey Origin", env.PASSKEY_ORIGIN]
+    ["Passkey Origins", env.PASSKEY_ORIGINS.join(", ")]
   ];
 
   return (
@@ -62,8 +65,9 @@ export default function AdminPage() {
       <GlassPanel className="space-y-4">
         <h2 className="font-display text-2xl text-white sm:text-3xl">Banque de mots</h2>
         <p className="max-w-3xl text-sm leading-6 text-slate-300">
-          Les mots solution restent curés pour garder des rounds propres. Les guesses valides, eux, sont contrôlés contre
-          une vraie wordlist française filtrée sur les longueurs de partie, avec blacklist anti-profanité normalisée.
+          Les mots solution viennent maintenant d’un pool curé + fréquentiel, séparé du lexique de guesses. Les guesses
+          valides, eux, sont contrôlés contre une vraie wordlist française filtrée sur les longueurs de partie, avec
+          blacklist anti-profanité normalisée.
         </p>
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3.5">
@@ -87,6 +91,41 @@ export default function AdminPage() {
               <p className="mt-1 text-sm text-slate-300">{lengthStats.allowed} guesses autorisés</p>
             </div>
           ))}
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <p className="eyebrow">Sources</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+              Chaque source est dédupliquée après normalisation. Les counts ci-dessous montrent ce qui a vraiment été
+              accepté dans la banque finale.
+            </p>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {dictionaryStats.sources.map((source: DictionarySourceStat) => (
+              <div key={source.id} className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3.5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="eyebrow">{source.role}</p>
+                    <p className="mt-2 break-all text-sm font-medium text-white">{source.label}</p>
+                  </div>
+                  <p className="number-tabular text-sm text-slate-200">
+                    {source.acceptedEntries}/{source.normalizedEntries}
+                  </p>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {source.lengths.map((lengthStats: DictionarySourceStat["lengths"][number]) => (
+                    <span
+                      key={`${source.id}-${lengthStats.length}`}
+                      className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-[11px] text-slate-200"
+                    >
+                      {lengthStats.length}L: {lengthStats.accepted}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </GlassPanel>
     </div>

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { GlassPanel, MetricBadge, SectionHeader } from "@motus/ui";
 
+import { PasskeyPanel } from "@/components/passkey-panel";
 import { ensurePlayerProfile } from "@/lib/player-profile";
 import { getServerSession } from "@/lib/session";
 
@@ -46,8 +47,8 @@ export default async function ProfilePage() {
               </h3>
               <p className="mt-2 break-all text-sm text-slate-300">{session.user.email}</p>
               <p className="mt-4 text-sm leading-6 text-slate-400">
-                Les actions de connexion, de conversion invité → compte et d’ajout de passkey se font depuis la page de
-                jeu pour garder une seule boucle claire.
+                La conversion invité → compte se fait toujours depuis la page de jeu, mais la gestion des passkeys reste
+                disponible ici aussi une fois connecté.
               </p>
             </div>
 
@@ -61,6 +62,8 @@ export default async function ProfilePage() {
               </p>
             </div>
           </div>
+
+          <PasskeyPanel />
         </GlassPanel>
       )}
     </div>

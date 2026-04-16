@@ -48,6 +48,7 @@ services:
         NEXT_PUBLIC_GAME_WS_URL: ${NEXT_PUBLIC_GAME_WS_URL:-ws://localhost:2567}
         PASSKEY_RP_ID: ${PASSKEY_RP_ID:-localhost}
         PASSKEY_ORIGIN: ${PASSKEY_ORIGIN:-http://localhost:3000}
+        PASSKEY_ORIGINS: ${PASSKEY_ORIGINS:-}
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
@@ -58,6 +59,7 @@ services:
       GAME_SERVICE_KEY: ${GAME_SERVICE_KEY:?Set GAME_SERVICE_KEY in .env}
       PASSKEY_RP_ID: ${PASSKEY_RP_ID:-localhost}
       PASSKEY_ORIGIN: ${PASSKEY_ORIGIN:-http://localhost:3000}
+      PASSKEY_ORIGINS: ${PASSKEY_ORIGINS:-}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
     depends_on:

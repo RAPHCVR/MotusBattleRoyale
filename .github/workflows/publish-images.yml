@@ -23,6 +23,7 @@ jobs:
       NEXT_PUBLIC_GAME_WS_URL: ${{ vars.NEXT_PUBLIC_GAME_WS_URL }}
       PASSKEY_RP_ID: ${{ vars.PASSKEY_RP_ID }}
       PASSKEY_ORIGIN: ${{ vars.PASSKEY_ORIGIN }}
+      PASSKEY_ORIGINS: ${{ vars.PASSKEY_ORIGINS }}
     strategy:
       fail-fast: false
       matrix:
@@ -61,6 +62,7 @@ jobs:
               echo "NEXT_PUBLIC_GAME_WS_URL=${NEXT_PUBLIC_GAME_WS_URL:-wss://rt-dev.raphcvr.me}"
               echo "PASSKEY_RP_ID=${PASSKEY_RP_ID:-play-dev.raphcvr.me}"
               echo "PASSKEY_ORIGIN=${PASSKEY_ORIGIN:-https://play-dev.raphcvr.me}"
+              echo "PASSKEY_ORIGINS=${PASSKEY_ORIGINS:-}"
               echo 'ARGS'
             } >> "$GITHUB_OUTPUT"
           else

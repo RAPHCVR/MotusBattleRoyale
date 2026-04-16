@@ -41,7 +41,7 @@ const trustedOrigins = Array.from(
   new Set(
     [
       env.NEXT_PUBLIC_APP_URL,
-      env.PASSKEY_ORIGIN,
+      ...env.PASSKEY_ORIGINS,
       process.env.NEXT_PUBLIC_APP_URL,
       process.env.PASSKEY_ORIGIN,
       ...defaultLocalOrigins
@@ -65,7 +65,7 @@ const basePlugins = [
   }),
   passkey({
     rpID: env.PASSKEY_RP_ID,
-    origin: env.PASSKEY_ORIGIN,
+    origin: env.PASSKEY_ORIGINS,
     rpName: "Motus Royale"
   })
 ];

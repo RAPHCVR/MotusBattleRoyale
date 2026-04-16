@@ -32,6 +32,7 @@ import type {
 } from "@motus/protocol";
 
 import { authClient } from "@/lib/auth-client";
+import { PasskeyPanel } from "@/components/passkey-panel";
 import {
   buildKeyboardLetterStates,
   composeGuessDraft,
@@ -43,6 +44,11 @@ import {
   getKnownLetterLimits,
   getLockedLetters,
 } from "@/components/play-shell-helpers";
+import {
+  canUseConditionalPasskeyAutofill,
+  getPasskeyErrorMessage,
+  isIgnorablePasskeyError,
+} from "@/lib/passkey-browser";
 
 const keyboardRows = ["AZERTYUIOP", "QSDFGHJKLM", "WXCVBN"];
 const feedbackLegend = [
@@ -87,7 +93,6 @@ type PendingAction =
   | "privateJoin"
   | "upgrade"
   | "signin"
-  | "passkeyAdd"
   | "passkeySignIn"
   | "signOut"
   | null;
@@ -314,6 +319,7 @@ export function PlayShell() {
   const previousBoardRef = useRef<BoardSnapshot | null>(null);
   const previousPlayerStatusRef = useRef<string | null>(null);
   const playSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const passkeyAutofillAttemptedRef = useRef(false);
   const stableTouchViewportHeightRef = useRef(0);
   const [prefersTouchInput, setPrefersTouchInput] = useState(false);
   const [showDesktopKeyboard, setShowDesktopKeyboard] = useState(false);
@@ -574,6 +580,67 @@ export function PlayShell() {
           },
           { label: "Statut", value: localStatusLabel },
         ];
+
+  useEffect(() => {
+    if (sessionUser) {
+      passkeyAutofillAttemptedRef.current = false;
+      return;
+    }
+
+    if (passkeyAutofillAttemptedRef.current) {
+      return;
+    }
+
+    passkeyAutofillAttemptedRef.current = true;
+    let cancelled = false;
+
+    async function preloadPasskeyAutofill() {
+      try {
+        const autofillAvailable = await canUseConditionalPasskeyAutofill();
+
+        if (!autofillAvailable) {
+          return;
+        }
+
+        const result = await authClient.signIn.passkey({
+          autoFill: true,
+        });
+
+        if (cancelled || !result) {
+          return;
+        }
+
+        if (result.error) {
+          if (!isIgnorablePasskeyError(result.error)) {
+            setStatusMessage(
+              getPasskeyErrorMessage(result.error, "Connexion passkey impossible."),
+            );
+          }
+          return;
+        }
+
+        await refetch();
+
+        if (cancelled) {
+          return;
+        }
+
+        window.dispatchEvent(new Event("motus-metrics-refresh"));
+        setStatusMessage("Connexion par passkey réussie.");
+      } catch (error) {
+        if (!cancelled && !isIgnorablePasskeyError(error as { code?: string; message?: string } | null)) {
+          setStatusMessage(getPasskeyErrorMessage(error, "Connexion passkey impossible."));
+        }
+      }
+    }
+
+    void preloadPasskeyAutofill();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refetch, sessionUser]);
+
   const showSystemStatusNote =
     isOperationalStatusMessage(statusMessage) &&
     statusMessage !== matchInfoBody;
@@ -1020,7 +1087,6 @@ export function PlayShell() {
         | "guest"
         | "upgrade"
         | "signin"
-        | "passkeyAdd"
         | "passkeySignIn"
         | "signOut"
         | null
@@ -1222,40 +1288,25 @@ export function PlayShell() {
     setPasswordInput("");
   }
 
-  async function addPasskey() {
-    setPendingAction("passkeyAdd");
-    setStatusMessage("Enregistrement de la passkey…");
-    const result = await authClient.passkey.addPasskey({
-      name: "Appareil principal",
-    });
-
-    if (result.error) {
-      setPendingAction(null);
-      setStatusMessage(
-        result.error.message ?? "Impossible d’ajouter une passkey.",
-      );
-      return;
-    }
-
-    setPendingAction(null);
-    setStatusMessage("Passkey enregistrée.");
-  }
-
   async function signInWithPasskey() {
     setPendingAction("passkeySignIn");
     setStatusMessage("Connexion par passkey…");
-    const result = await authClient.signIn.passkey();
+    try {
+      const result = await authClient.signIn.passkey();
 
-    if (result.error) {
+      if (result.error) {
+        setStatusMessage(getPasskeyErrorMessage(result.error, "Connexion passkey impossible."));
+        return;
+      }
+
+      await refetch();
+      window.dispatchEvent(new Event("motus-metrics-refresh"));
+      setStatusMessage("Connexion par passkey réussie.");
+    } catch (error) {
+      setStatusMessage(getPasskeyErrorMessage(error, "Connexion passkey impossible."));
+    } finally {
       setPendingAction(null);
-      setStatusMessage(result.error.message ?? "Connexion passkey impossible.");
-      return;
     }
-
-    await refetch();
-    window.dispatchEvent(new Event("motus-metrics-refresh"));
-    setPendingAction(null);
-    setStatusMessage("Connexion par passkey réussie.");
   }
 
   async function signOut() {
@@ -1628,7 +1679,7 @@ export function PlayShell() {
                         type="email"
                         value={emailInput}
                         onChange={(event) => setEmailInput(event.target.value)}
-                        autoComplete="email"
+                        autoComplete="username webauthn"
                       />
                       <input
                         className="input-shell"
@@ -1788,7 +1839,7 @@ export function PlayShell() {
                           onChange={(event) =>
                             setEmailInput(event.target.value)
                           }
-                          autoComplete="email"
+                          autoComplete="username webauthn"
                         />
                         <input
                           className="input-shell"
@@ -1848,17 +1899,9 @@ export function PlayShell() {
                       </form>
                     )}
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <button
-                        className="button-secondary w-full"
-                        type="button"
-                        onClick={addPasskey}
-                        disabled={pendingAction === "passkeyAdd"}
-                      >
-                        {pendingAction === "passkeyAdd"
-                          ? "Ajout…"
-                          : "Ajouter une passkey"}
-                      </button>
+                    <PasskeyPanel className="mt-2" />
+
+                    <div className="grid gap-3 sm:grid-cols-1">
                       <button
                         className="button-danger w-full"
                         type="button"

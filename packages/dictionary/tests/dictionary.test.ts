@@ -22,11 +22,31 @@ describe("dictionary", () => {
   it("loads a real word bank for 6 and 7-letter rounds", () => {
     const stats = getDictionaryStats();
 
-    expect(stats.solutionCount).toBeGreaterThan(80);
+    expect(stats.solutionCount).toBeGreaterThan(1000);
     expect(stats.allowedCount).toBeGreaterThan(1000);
     expect(stats.lengths).toEqual([
       { length: 6, solutions: expect.any(Number), allowed: expect.any(Number) },
       { length: 7, solutions: expect.any(Number), allowed: expect.any(Number) }
     ]);
+    expect(stats.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "builtin:curated-solutions",
+          role: "solutions",
+        }),
+        expect.objectContaining({
+          id: "file:solutions/lexique-common-top1400.txt",
+          role: "solutions",
+        }),
+        expect.objectContaining({
+          id: "package:french-wordlist",
+          role: "allowed",
+        }),
+        expect.objectContaining({
+          id: "package:french-badwords-list",
+          role: "banned",
+        }),
+      ]),
+    );
   });
 });
