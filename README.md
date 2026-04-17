@@ -86,7 +86,7 @@ Important variables:
 
 ## Cloudflared Preview
 
-The repo tracks a template at [infra/cloudflared/config.example.yml](C:/Users/rchauvier/OneDrive%20-%20AUBAY/Documents/MotusBattleRoyal/infra/cloudflared/config.example.yml). `cloudflared` does not expand `${VAR}` placeholders inside that YAML, so render the real config first:
+The repo tracks a template at `infra/cloudflared/config.example.yml`. `cloudflared` does not expand `${VAR}` placeholders inside that YAML, so render the real config first:
 
 ```powershell
 $env:BASE_DOMAIN="your-domain.example"
@@ -125,13 +125,13 @@ The generated file `infra/cloudflared/config.yml` is intentionally ignored.
 
 ## Kubernetes
 
-A production-oriented Kustomize overlay is available under [infra/kubernetes/production](C:/Users/rchauvier/OneDrive%20-%20AUBAY/Documents/MotusBattleRoyal/infra/kubernetes/production/README.md).
+A production-oriented Kustomize overlay is available under `infra/kubernetes/production`.
 
 It includes:
 
 - `web` and `game` deployments with health probes and rolling updates
 - `postgres` and `redis` persistent stateful workloads
-- separate ingress objects for the frontend host and the realtime host
+- separate ingress objects for the app root and the `/realtime` websocket path on the same public host
 - GHCR-ready image names for `web` and `game`
 - mutable `latest` tags for prod images, with Keel polling the cluster every minute
 
