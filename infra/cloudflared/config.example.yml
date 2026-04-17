@@ -2,14 +2,9 @@ tunnel: ${CLOUDFLARED_TUNNEL_ID}
 credentials-file: /etc/cloudflared/creds.json
 
 ingress:
-  - hostname: play-dev.${BASE_DOMAIN}
-    service: ${PLAY_ORIGIN_SERVICE}
+  - hostname: motus.${BASE_DOMAIN}
+    service: ${PUBLIC_ORIGIN_SERVICE}
     originRequest:
-      httpHostHeader: ${PLAY_HOST_HEADER}
-
-  - hostname: rt-dev.${BASE_DOMAIN}
-    service: ${RT_ORIGIN_SERVICE}
-    originRequest:
-      httpHostHeader: ${RT_HOST_HEADER}
+      httpHostHeader: ${PUBLIC_HOST_HEADER}
 
   - service: http_status:404

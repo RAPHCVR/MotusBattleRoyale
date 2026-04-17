@@ -23,7 +23,7 @@ export default function AdminPage() {
     <div className="page-shell space-y-5 py-6 md:py-8">
       <SectionHeader
         eyebrow="Admin"
-        title="Local → preview → prod sans changer d’architecture"
+        title="Local → tunnel → prod sans changer d’architecture"
         body="Cette page sert de contrôle rapide pour les URLs, le RP ID passkey et les dépendances infra attendues autour du site."
       />
 
@@ -41,8 +41,8 @@ export default function AdminPage() {
             </li>
             <li>
               2. <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">cloudflared</code> pointe{" "}
-              <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">play-dev.*</code> et{" "}
-              <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">rt-dev.*</code> vers Caddy.
+              <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">motus.*</code> vers Caddy, et{" "}
+              <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-100">/realtime</code> est proxyfié vers le game.
             </li>
             <li>3. Le navigateur voit les cookies Better Auth sur le hostname tunnelisé.</li>
             <li>4. La passkey est testée uniquement sur le vrai RP ID prévu.</li>

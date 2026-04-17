@@ -3,11 +3,12 @@ kind: ConfigMap
 metadata:
   name: motus-runtime
 data:
-  NEXT_PUBLIC_APP_URL: https://play-dev.raphcvr.me
-  AUTH_BASE_URL: https://play-dev.raphcvr.me/api/auth
-  NEXT_PUBLIC_GAME_WS_URL: wss://rt-dev.raphcvr.me
-  GAME_PUBLIC_WS_URL: wss://rt-dev.raphcvr.me
-  GAME_PUBLIC_HTTP_URL: https://rt-dev.raphcvr.me
-  PASSKEY_RP_ID: play-dev.raphcvr.me
-  PASSKEY_ORIGIN: https://play-dev.raphcvr.me
-  CORS_ORIGIN: https://play-dev.raphcvr.me
+  NEXT_PUBLIC_APP_URL: https://motus.raphcvr.me
+  AUTH_BASE_URL: https://motus.raphcvr.me/api/auth
+  NEXT_PUBLIC_GAME_WS_URL: wss://motus.raphcvr.me/realtime
+  GAME_PUBLIC_WS_URL: wss://motus.raphcvr.me/realtime
+  GAME_PUBLIC_HTTP_URL: https://motus.raphcvr.me/realtime
+  PASSKEY_RP_ID: motus.raphcvr.me
+  PASSKEY_ORIGIN: https://motus.raphcvr.me
+  PASSKEY_ORIGINS: https://motus.raphcvr.me
+  CORS_ORIGIN: https://motus.raphcvr.me

@@ -12,10 +12,10 @@ Original prompt: Dis moi que faire, pour effectuer, le meilleur Motus Like, Batt
 - Cloudflared config flow fixed: template rendering now produces `infra/cloudflared/config.yml`, and `cloudflared tunnel ingress validate` passes on the rendered config.
 - Cloudflared config flow now supports both Docker-side origins (`caddy`) and host-side origins (`localhost:3000` / `localhost:2567`) so the repo works with either the preview container or a Windows `cloudflared.exe` service install.
 - Docker now forwards public frontend URLs into the web image build, so `NEXT_PUBLIC_*` and passkey settings can be rebuilt correctly for real hostnames instead of staying pinned to `localhost`.
-- Local `.env` has been provisioned for `play-dev.raphcvr.me` / `rt-dev.raphcvr.me`, the Docker stack has been recreated with those values, and public checks now succeed on both the web origin and the game `/healthz` endpoint through Cloudflare Tunnel.
+- Local `.env` has been provisioned for `motus.raphcvr.me`, the Docker stack has been recreated with those values, and public checks now succeed on both the web origin and the game `/realtime/healthz` endpoint through Cloudflare Tunnel.
 - Play page crash chain fixed in three steps: Better Auth client now resolves `/api/auth` against `window.location.origin`, the game ticket API now reads session state via the public Better Auth HTTP endpoint with cookies forwarded, and the protocol schema now matches the flat Colyseus 0.17 seat reservation returned by the server.
 - Remaining join issue after ticket creation was a Colyseus client/server version mismatch: frontend `colyseus.js@0.16` still expects the legacy nested `response.room.*` reservation shape, while the server returns the flat 0.17 reservation object. `PlayShell` now adapts the flat reservation into the legacy shape before `consumeSeatReservation()`.
-- Rebuilt and redeployed the web container after the adapter patch. Playwright validation on `https://play-dev.raphcvr.me/play` now succeeds: guest session creation works, clicking `Rejoindre la queue publique` transitions the UI into the connected queue/lobby state, and the right rail shows `WS Connected`.
+- Rebuilt and redeployed the web container after the adapter patch. Playwright validation on `https://motus.raphcvr.me/play` now succeeds: guest session creation works, clicking `Rejoindre la queue publique` transitions the UI into the connected queue/lobby state, and the right rail shows `WS Connected`.
 - Captured visual proof after the fix: `.playwright-cli/page-2026-03-19T17-45-30-386Z.png`.
 - Protocol test was still failing because Vitest was importing stale JS from `packages/protocol/src/index.js` instead of the TS source. The test now imports `../src/index.ts` explicitly, and `corepack pnpm --filter @motus/protocol test` passes again.
 - Remaining non-blocker: the web container still logs `next start` warning with `output: standalone`; functional for now, but it should be switched to `node .next/standalone/server.js` in a later cleanup pass.
@@ -27,7 +27,7 @@ Original prompt: Dis moi que faire, pour effectuer, le meilleur Motus Like, Batt
 - Added `apps/web/src/app/icon.svg`, rebuilt the app, and verified browser console is now clean on the public hostname. The previous favicon 404 is gone.
 - Verified after the responsive pass: `corepack pnpm --filter @motus/web build`, `corepack pnpm --filter @motus/protocol test`, Docker rebuild/redeploy of `web`, mobile Playwright screenshots on `/`, `/play`, `/leaderboard`, `/admin`, and a real mobile join flow `guest -> queue publique` showing `WS Connected`.
 - Public/private minimum players are currently both set to `2` in `packages/protocol/src/index.ts`. Rebuilt the workspace, re-ran `corepack pnpm --filter @motus/protocol test`, rebuilt Docker images for `web` and `game`, and redeployed both containers successfully.
-- Post-redeploy checks green: `http://localhost:3000/play` -> `200`, `http://localhost:2567/healthz` -> OK JSON, `https://play-dev.raphcvr.me/play` -> `200`, `https://rt-dev.raphcvr.me/healthz` -> OK JSON.
+- Post-redeploy checks green: `http://localhost:3000/play` -> `200`, `http://localhost:2567/healthz` -> OK JSON, `https://motus.raphcvr.me/play` -> `200`, `https://motus.raphcvr.me/realtime/healthz` -> OK JSON.
 - Verified behavior after the min-player change:
   - Public queue with 2 players already worked as designed: both clients land in the same room, `Players = 2`, phase becomes `COUNTDOWN`, and the 20s public timer starts automatically.
   - Private room with 2 players did not auto-start when both clicked `Ready`; only the host button triggered the launch.
@@ -49,8 +49,8 @@ Original prompt: Dis moi que faire, pour effectuer, le meilleur Motus Like, Batt
   - `corepack pnpm --recursive --workspace-concurrency=1 --if-present build` passed.
   - `docker compose build web game` passed.
   - `docker compose up -d --force-recreate web game` passed.
-  - `http://localhost:3000/play` and `https://play-dev.raphcvr.me/play` both returned `200`.
-  - `http://localhost:2567/healthz` and `https://rt-dev.raphcvr.me/healthz` both returned healthy JSON.
+  - `http://localhost:3000/play` and `https://motus.raphcvr.me/play` both returned `200`.
+  - `http://localhost:2567/healthz` and `https://motus.raphcvr.me/realtime/healthz` both returned healthy JSON.
   - Playwright visual audit passed on the public hostname for `/`, `/play`, `/leaderboard`, and `/admin` across phone/tablet/desktop-sized windows, with console logs remaining empty on audited sessions.
 - Feedback UX pass completed for live rounds:
   - Round timers were lengthened in `packages/game-core` to `70s, 70s, 65s, 60s, 50s, 45s, 35s` so the early game stops feeling rushed while later rounds still accelerate.
@@ -63,7 +63,7 @@ Original prompt: Dis moi que faire, pour effectuer, le meilleur Motus Like, Batt
   - `corepack pnpm --recursive --if-present test` passed after adjusting the helper fixtures to cover mixed absent/present letters correctly.
   - `corepack pnpm --recursive --workspace-concurrency=1 --if-present build` passed.
   - `docker compose build web game` and `docker compose up -d --force-recreate web game` passed after the timer pass; a second targeted `docker compose build web && docker compose up -d --force-recreate web` passed after the mobile auto-focus refinement.
-  - Public health remained green throughout: `https://play-dev.raphcvr.me/play` returned `200` and `https://rt-dev.raphcvr.me/healthz` returned healthy JSON after redeploy.
+  - Public health remained green throughout: `https://motus.raphcvr.me/play` returned `200` and `https://motus.raphcvr.me/realtime/healthz` returned healthy JSON after redeploy.
   - Real Playwright browser sessions were used again on the public tunnel with two isolated users in a private room. Verified states included `Lobby -> Ready -> Round 1`, a longer visible round timer (`00:55` on the refreshed build), the new feedback legend, blocked keyboard letters after a valid guess, and clean browser consoles on both desktop and mobile-sized sessions.
   - Final mobile-focus check passed on a freshly reopened narrow session after the last redeploy: the page remained active at round start while the textbox was no longer auto-focused, confirming the `window.innerWidth < 768` safeguard works as intended on the shipped bundle.
 - Visual rollback and redesign pass after negative review:
@@ -78,7 +78,7 @@ Original prompt: Dis moi que faire, pour effectuer, le meilleur Motus Like, Batt
   - `corepack pnpm --filter @motus/web test` passed after the mobile marquee cleanup.
   - `corepack pnpm --recursive --workspace-concurrency=1 --if-present build` passed after the redesign.
   - `docker compose build web && docker compose up -d --force-recreate web` passed twice during the redesign iterations.
-  - Public checks after the final redeploy: `https://play-dev.raphcvr.me/` -> `200`, `https://play-dev.raphcvr.me/play` -> `200`, `https://rt-dev.raphcvr.me/healthz` -> healthy JSON.
+  - Public checks after the final redeploy: `https://motus.raphcvr.me/` -> `200`, `https://motus.raphcvr.me/play` -> `200`, `https://motus.raphcvr.me/realtime/healthz` -> healthy JSON.
  - Playwright screenshots were reviewed for the redesigned homepage and the live round UI. The last accepted captures for this pass are:
     - Home desktop: `.playwright-cli/page-2026-03-25T16-08-09-969Z.png`
     - Home mobile before the final marquee mobile cleanup: `.playwright-cli/page-2026-03-25T16-08-04-580Z.png`
@@ -86,7 +86,7 @@ Original prompt: Dis moi que faire, pour effectuer, le meilleur Motus Like, Batt
     - Live round mobile with the redesigned legend cards: `.playwright-cli/page-2026-03-25T16-14-06-792Z.png`
 
 2026-03-26
-- Fresh audit pass completed against the public tunnel on `play-dev.raphcvr.me` / `rt-dev.raphcvr.me`.
+- Fresh audit pass completed against the public tunnel on `motus.raphcvr.me`.
 - Workspace validation re-run:
   - `corepack pnpm --recursive --if-present test` passed.
   - `corepack pnpm --recursive --workspace-concurrency=1 --if-present build` passed.
@@ -127,7 +127,7 @@ Original prompt: Dis moi que faire, pour effectuer, le meilleur Motus Like, Batt
   - `docker compose build web` passed on the final standalone runner image.
   - `docker compose up -d --force-recreate postgres redis game web caddy` passed.
   - Local health checks passed: `http://localhost:3000/` -> `200`, `http://localhost:2567/healthz` -> `200`.
-  - Public health checks passed: `https://play-dev.raphcvr.me/` -> `200`, `/play` -> `200`, `/admin` -> `200`, `/profile` -> `200`, `https://rt-dev.raphcvr.me/healthz` -> healthy JSON.
+  - Public health checks passed: `https://motus.raphcvr.me/` -> `200`, `/play` -> `200`, `/admin` -> `200`, `/profile` -> `200`, `https://motus.raphcvr.me/realtime/healthz` -> healthy JSON.
   - Fresh Playwright checks after the final runtime fix were clean:
     - home mobile: `.playwright-cli/page-2026-03-26T13-55-42-511Z.png`
     - play mobile pre-auth: `.playwright-cli/page-2026-03-26T13-55-42-898Z.png`

@@ -38,12 +38,14 @@ if (!baseDomain) {
 const variables = {
   BASE_DOMAIN: baseDomain,
   CLOUDFLARED_TUNNEL_ID: process.env.CLOUDFLARED_TUNNEL_ID ?? envFromFile.CLOUDFLARED_TUNNEL_ID,
-  PLAY_ORIGIN_SERVICE:
-    process.env.PLAY_ORIGIN_SERVICE ?? envFromFile.PLAY_ORIGIN_SERVICE ?? "http://caddy:80",
-  RT_ORIGIN_SERVICE:
-    process.env.RT_ORIGIN_SERVICE ?? envFromFile.RT_ORIGIN_SERVICE ?? "http://caddy:80",
-  PLAY_HOST_HEADER: process.env.PLAY_HOST_HEADER ?? envFromFile.PLAY_HOST_HEADER ?? `play-dev.${baseDomain}`,
-  RT_HOST_HEADER: process.env.RT_HOST_HEADER ?? envFromFile.RT_HOST_HEADER ?? `rt-dev.${baseDomain}`
+  PUBLIC_ORIGIN_SERVICE:
+    process.env.PUBLIC_ORIGIN_SERVICE ??
+    envFromFile.PUBLIC_ORIGIN_SERVICE ??
+    "http://caddy:80",
+  PUBLIC_HOST_HEADER:
+    process.env.PUBLIC_HOST_HEADER ??
+    envFromFile.PUBLIC_HOST_HEADER ??
+    `motus.${baseDomain}`
 };
 
 for (const [key, value] of Object.entries(variables)) {

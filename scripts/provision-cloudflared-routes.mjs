@@ -47,7 +47,7 @@ if (!tunnelRef) {
   );
 }
 
-const hostnames = [`play-dev.${baseDomain}`, `rt-dev.${baseDomain}`];
+const hostnames = [`motus.${baseDomain}`];
 
 async function run(args) {
   await new Promise((resolve, reject) => {

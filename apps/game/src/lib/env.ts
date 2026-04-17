@@ -83,7 +83,9 @@ const localAuthVerifyUrl =
     ? "http://localhost:3000/api/auth/one-time-token/verify"
     : (process.env.AUTH_VERIFY_URL ?? "http://localhost:3000/api/auth/one-time-token/verify");
 const rawPublicWsUrl = process.env.GAME_PUBLIC_WS_URL ?? process.env.NEXT_PUBLIC_GAME_WS_URL;
-const rawPublicHttpUrl = process.env.GAME_PUBLIC_HTTP_URL ?? process.env.RT_ORIGIN_SERVICE;
+const rawPublicHttpUrl =
+  process.env.GAME_PUBLIC_HTTP_URL ??
+  process.env.PUBLIC_ORIGIN_SERVICE;
 const localGamePublicWsUrl =
   localDevEnabled && !isLocalAddress(rawPublicWsUrl)
     ? "ws://localhost:2567"

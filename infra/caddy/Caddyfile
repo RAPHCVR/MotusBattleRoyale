@@ -3,14 +3,17 @@
 }
 
 :80 {
-  @play host localhost play-dev.{$BASE_DOMAIN} play.{$BASE_DOMAIN}
-  handle @play {
-    reverse_proxy web:3000
-  }
+  @motus host localhost motus.{$BASE_DOMAIN}
 
-  @rt host rt-dev.{$BASE_DOMAIN} rt.{$BASE_DOMAIN}
-  handle @rt {
-    reverse_proxy game:2567
+  handle @motus {
+    @realtime path /realtime /realtime/*
+    handle @realtime {
+      reverse_proxy game:2567
+    }
+
+    handle {
+      reverse_proxy web:3000
+    }
   }
 
   respond "unknown host" 404

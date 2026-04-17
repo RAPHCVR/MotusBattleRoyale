@@ -10,7 +10,7 @@ This overlay is intended for a cluster where:
 
 - `web` and `game` deployments with rolling updates, probes, non-root runtime and soft topology spreading
 - `postgres` and `redis` stateful workloads with persistent volumes
-- separate ingress objects for the frontend host and the realtime host
+- separate ingress objects for the app root and the `/realtime` websocket path on the same public host
 - placeholder secrets kept in version control so `kubectl apply -k` stays renderable
 
 ## Before apply
@@ -47,5 +47,5 @@ kubectl apply -k infra/kubernetes/production
 ## Notes
 
 - `postgres-init-configmap.yaml` is idempotent, but it only runs automatically when the PostgreSQL data directory is empty.
-- The overlay currently points to `play-dev.raphcvr.me` and `rt-dev.raphcvr.me` to match the repo's current public settings.
+- The overlay currently points to `motus.raphcvr.me`, with `/` served by `web` and `/realtime` served by `game`.
 - The overlay tracks the mutable `latest` tag for both images, and Keel polls the live cluster every minute to roll forward automatically.

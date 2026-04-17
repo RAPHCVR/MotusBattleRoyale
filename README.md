@@ -78,8 +78,8 @@ Important variables:
 - `CLOUDFLARED_TUNNEL_ID`
 - `CLOUDFLARED_TUNNEL_NAME`
 - `CLOUDFLARED_CREDENTIALS_FILE`
-- `PLAY_ORIGIN_SERVICE`
-- `RT_ORIGIN_SERVICE`
+- `PUBLIC_ORIGIN_SERVICE`
+- `PUBLIC_HOST_HEADER`
 - `PASSKEY_RP_ID`
 - `PASSKEY_ORIGIN`
 - `PASSKEY_ORIGINS`
@@ -101,31 +101,15 @@ Then start the preview profile:
 docker compose --profile preview up -d cloudflared
 ```
 
-Expected hostnames:
+Expected hostname:
 
-- `play-dev.<your-domain>`
-- `rt-dev.<your-domain>`
+- `motus.<your-domain>`
 
 Default rendered services target the Docker-side `caddy` container:
 
-- `PLAY_ORIGIN_SERVICE=http://caddy:80`
-- `RT_ORIGIN_SERVICE=http://caddy:80`
+- `PUBLIC_ORIGIN_SERVICE=http://caddy:80`
 
-If you are running `cloudflared.exe` directly on the Windows host or using a dashboard-managed tunnel token, point the public hostnames to the host ports instead:
-
-- `play-dev.<your-domain>` -> `http://localhost:3000`
-- `rt-dev.<your-domain>` -> `http://localhost:2567`
-
-For a locally rendered host-side config, render with:
-
-```powershell
-$env:BASE_DOMAIN="your-domain.example"
-$env:CLOUDFLARED_TUNNEL_ID="your-tunnel-id"
-$env:PLAY_ORIGIN_SERVICE="http://localhost:3000"
-$env:RT_ORIGIN_SERVICE="http://localhost:2567"
-node .\scripts\render-cloudflared-config.mjs
-cloudflared --config .\infra\cloudflared\config.yml tunnel ingress validate
-```
+This single-host setup expects the public hostname to hit a reverse proxy that already routes `/` to `web` and `/realtime` to `game`. In this repo, that reverse proxy is `caddy`.
 
 If your named tunnel already exists and `cloudflared` is authenticated locally, you can create the DNS routes with:
 

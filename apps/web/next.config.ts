@@ -8,7 +8,7 @@ const configDir = dirname(fileURLToPath(import.meta.url));
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: join(configDir, "../../"),
-  allowedDevOrigins: ["127.0.0.1", "play-dev.raphcvr.me", "rt-dev.raphcvr.me"]
+  allowedDevOrigins: ["127.0.0.1", "localhost", "motus.raphcvr.me"]
 };
 
 export default nextConfig;

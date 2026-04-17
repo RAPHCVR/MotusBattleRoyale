@@ -78,7 +78,7 @@ export function resolveTicketWsEndpoint(
   if (isLoopbackHost(requestUrl.hostname)) {
     const realtimeOrigin =
       options.realtimeOrigin ??
-      process.env.RT_ORIGIN_SERVICE ??
+      process.env.PUBLIC_ORIGIN_SERVICE ??
       "http://localhost:2567";
     const realtimeUrl = new URL(realtimeOrigin);
     const localWsUrl = toWebSocketOrigin(requestOrigin);
@@ -93,7 +93,8 @@ export function resolveTicketWsEndpoint(
   }
 
   const tunnelHost =
-    options.tunnelHost?.trim() ?? process.env.RT_HOST_HEADER?.trim();
+    options.tunnelHost?.trim() ??
+    process.env.PUBLIC_HOST_HEADER?.trim();
 
   if (tunnelHost) {
     const tunnelWsUrl = toWebSocketOrigin(requestOrigin);
