@@ -99,9 +99,35 @@ export function isIgnorablePasskeyError(error?: { code?: string; message?: strin
   return ignoredPasskeyErrorTokens.some((token) => haystack.includes(token));
 }
 
+export function shouldUseCompatPasskeyAlgorithms() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const navigatorObject = navigator as NavigatorWithUserAgentData;
+  return getBrowserLabel(navigator.userAgent, navigatorObject) === "Firefox";
+}
+
 export function getPasskeyErrorMessage(error: unknown, fallback: string) {
   if (!error) {
     return fallback;
+  }
+
+  const normalizedError =
+    error instanceof Error
+      ? `${error.name} ${error.message}`
+      : typeof error === "string"
+        ? error
+        : typeof error === "object"
+          ? JSON.stringify(error)
+          : "";
+  const normalizedHaystack = normalizedError.toLowerCase();
+
+  if (
+    normalizedHaystack.includes("pubkeycredparams") ||
+    normalizedHaystack.includes("error_authenticator_no_supported_pubkeycredparams_alg")
+  ) {
+    return "Le navigateur n’a pas accepte la combinaison d’algorithmes WebAuthn. Recharge la page puis reessaie. Si ca persiste sous Windows, verifie que Windows Hello est configure avec au moins un PIN.";
   }
 
   if (typeof error === "string") {

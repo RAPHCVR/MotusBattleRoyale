@@ -8,6 +8,7 @@ import { MetricBadge } from "@motus/ui";
 
 import { authClient } from "@/lib/auth-client";
 import { getPasskeyErrorMessage, getSuggestedPasskeyName } from "@/lib/passkey-browser";
+import { registerPasskey } from "@/lib/passkey-registration";
 
 function formatPasskeyDate(value: Date | string) {
   const parsed = new Date(value);
@@ -58,18 +59,7 @@ export function PasskeyPanel(props: PasskeyPanelProps) {
     setIsAdding(true);
     setStatusMessage("Enregistrement de la passkey…");
     try {
-      const result = await authClient.passkey.addPasskey({
-        name: getSuggestedPasskeyName(),
-        useAutoRegister: true,
-      });
-
-      if (result.error) {
-        setStatusMessage(
-          getPasskeyErrorMessage(result.error, "Impossible d’ajouter une passkey."),
-        );
-        return;
-      }
-
+      await registerPasskey(getSuggestedPasskeyName());
       await passkeyQuery.refetch();
       setStatusMessage("Passkey enregistrée.");
     } catch (error) {
