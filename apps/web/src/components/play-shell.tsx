@@ -2,6 +2,7 @@
 
 import {
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   useDeferredValue,
   useEffect,
@@ -98,6 +99,9 @@ type PendingAction =
   | null;
 
 type MatchPhase = RoomSnapshot["phase"] | null;
+type SystemStatusTone = "info" | "success" | "error";
+
+const defaultStatusMessage = "Prêt pour la première partie.";
 
 function getPhaseBadgeValue(phase: MatchPhase) {
   switch (phase) {
@@ -161,18 +165,130 @@ function isOperationalStatusMessage(message: string) {
   return [
     "erreur",
     "impossible",
+    "invalid",
+    "incorrect",
     "connexion",
     "création",
     "session",
     "compte",
     "passkey",
     "salon",
+    "room",
+    "code",
+    "ticket",
+    "email",
+    "password",
+    "mot de passe",
+    "identifiant",
+    "refusé",
+    "refuse",
+    "not found",
+    "introuvable",
+    "réussie",
+    "réussi",
+    "plein écran",
     "match public",
     "recherche",
     "préparation",
     "chargement",
     "fermée",
   ].some((token) => lower.includes(token));
+}
+
+function getSystemStatusTone(message: string): SystemStatusTone {
+  const lower = message.toLowerCase();
+
+  if (
+    [
+      "erreur",
+      "impossible",
+      "invalid",
+      "incorrect",
+      "refusé",
+      "refuse",
+      "not found",
+      "introuvable",
+      "bad request",
+      "unauthorized",
+      "forbidden",
+      "échoué",
+      "echec",
+      "fermée",
+      "fermee",
+    ].some((token) => lower.includes(token))
+  ) {
+    return "error";
+  }
+
+  if (
+    [
+      "réussie",
+      "réussi",
+      "prêt",
+      "prête",
+      "créé",
+      "créée",
+      "lié",
+      "lancé",
+      "lancée",
+      "accepté",
+      "trouvé",
+      "connecté",
+      "connectée",
+    ].some((token) => lower.includes(token))
+  ) {
+    return "success";
+  }
+
+  return "info";
+}
+
+function normalizePrivateCodeInput(value: string) {
+  return value.replace(/\s+/g, "").toUpperCase().slice(0, 8);
+}
+
+function getFriendlyAuthMessage(message: string, fallback: string) {
+  const lower = message.toLowerCase();
+
+  if (
+    lower.includes("invalid email or password") ||
+    lower.includes("invalid credentials") ||
+    lower.includes("wrong password")
+  ) {
+    return "Email ou mot de passe incorrect.";
+  }
+
+  if (lower.includes("user already exists") || lower.includes("email already")) {
+    return "Un compte existe déjà pour cet email.";
+  }
+
+  return message || fallback;
+}
+
+function getFriendlyLobbyMessage(message: string, fallback: string) {
+  const lower = message.toLowerCase();
+
+  if (lower.includes("private room not found")) {
+    return "Aucun salon privé ne correspond à ce code.";
+  }
+
+  if (lower.includes("ticket refused")) {
+    return "Le ticket de connexion a été refusé.";
+  }
+
+  return message || fallback;
+}
+
+function triggerSubmitOnEnter(
+  event: ReactKeyboardEvent<HTMLInputElement>,
+  action: () => void,
+) {
+  if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+    return;
+  }
+
+  event.preventDefault();
+  action();
 }
 
 function formatRemaining(target?: number | null, now = Date.now()) {
@@ -293,7 +409,7 @@ export function PlayShell() {
   const { data: session, isPending, refetch } = authClient.useSession();
   const [isBusy, startTransition] = useTransition();
   const [statusMessage, setStatusMessage] = useState<string>(
-    "Prêt pour la première partie.",
+    defaultStatusMessage,
   );
   const [roomSnapshot, setRoomSnapshot] = useState<RoomSnapshot | null>(null);
   const [boardSnapshot, setBoardSnapshot] = useState<BoardSnapshot | null>(
@@ -642,9 +758,12 @@ export function PlayShell() {
   }, [refetch, sessionUser]);
 
   const showSystemStatusNote =
+    statusMessage !== defaultStatusMessage &&
     isOperationalStatusMessage(statusMessage) &&
     statusMessage !== matchInfoBody;
+  const systemStatusTone = getSystemStatusTone(statusMessage);
   const showInlineStatusMessage = isLiveRound || showSystemStatusNote;
+  const normalizedPrivateCode = normalizePrivateCodeInput(privateCode);
   const liveBoardMaxWidth = isLiveRound
     ? prefersTouchInput
       ? fullscreenActive
@@ -1119,7 +1238,9 @@ export function PlayShell() {
       };
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Ticket refusé.");
+        throw new Error(
+          getFriendlyLobbyMessage(payload.error ?? "Ticket refusé.", "Ticket refusé."),
+        );
       }
 
       roomRef.current?.removeAllListeners();
@@ -1217,7 +1338,9 @@ export function PlayShell() {
       );
     } catch (error) {
       setStatusMessage(
-        error instanceof Error ? error.message : "Connexion impossible.",
+        error instanceof Error
+          ? getFriendlyLobbyMessage(error.message, "Connexion impossible.")
+          : "Connexion impossible.",
       );
     } finally {
       setPendingAction(null);
@@ -1232,7 +1355,10 @@ export function PlayShell() {
     if (result.error) {
       setPendingAction(null);
       setStatusMessage(
-        result.error.message ?? "Impossible de créer la session invitée.",
+        getFriendlyAuthMessage(
+          result.error.message ?? "Impossible de créer la session invitée.",
+          "Impossible de créer la session invitée.",
+        ),
       );
       return;
     }
@@ -1244,18 +1370,33 @@ export function PlayShell() {
   }
 
   async function signUpEmail() {
+    const normalizedEmail = emailInput.trim();
+
+    if (!normalizedEmail) {
+      setStatusMessage("Renseigne un email valide.");
+      return;
+    }
+
+    if (!passwordInput) {
+      setStatusMessage("Renseigne un mot de passe pour créer le compte.");
+      return;
+    }
+
     setPendingAction("upgrade");
     setStatusMessage("Création ou liaison du compte…");
     const result = await authClient.signUp.email({
       name: nameInput || sessionUser?.name || "Joueur Motus",
-      email: emailInput,
+      email: normalizedEmail,
       password: passwordInput,
     });
 
     if (result.error) {
       setPendingAction(null);
       setStatusMessage(
-        result.error.message ?? "Création de compte impossible.",
+        getFriendlyAuthMessage(
+          result.error.message ?? "Création de compte impossible.",
+          "Création de compte impossible.",
+        ),
       );
       return;
     }
@@ -1268,16 +1409,33 @@ export function PlayShell() {
   }
 
   async function signInEmail() {
+    const normalizedEmail = emailInput.trim();
+
+    if (!normalizedEmail) {
+      setStatusMessage("Renseigne ton email pour te connecter.");
+      return;
+    }
+
+    if (!passwordInput) {
+      setStatusMessage("Renseigne ton mot de passe pour te connecter.");
+      return;
+    }
+
     setPendingAction("signin");
     setStatusMessage("Connexion au compte…");
     const result = await authClient.signIn.email({
-      email: emailInput,
+      email: normalizedEmail,
       password: passwordInput,
     });
 
     if (result.error) {
       setPendingAction(null);
-      setStatusMessage(result.error.message ?? "Connexion impossible.");
+      setStatusMessage(
+        getFriendlyAuthMessage(
+          result.error.message ?? "Connexion impossible.",
+          "Connexion impossible.",
+        ),
+      );
       return;
     }
 
@@ -1315,7 +1473,12 @@ export function PlayShell() {
 
     if (result.error) {
       setPendingAction(null);
-      setStatusMessage(result.error.message ?? "Déconnexion impossible.");
+      setStatusMessage(
+        getFriendlyAuthMessage(
+          result.error.message ?? "Déconnexion impossible.",
+          "Déconnexion impossible.",
+        ),
+      );
       return;
     }
 
@@ -1333,6 +1496,24 @@ export function PlayShell() {
   function handleSignInSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void signInEmail();
+  }
+
+  function joinPrivateRoom() {
+    if (normalizedPrivateCode.length < 4) {
+      setStatusMessage("Le code salon doit contenir entre 4 et 8 caractères.");
+      return;
+    }
+
+    void connectToRoom("/api/game/private-join", {
+      action: "privateJoin",
+      body: { roomCode: normalizedPrivateCode },
+      pendingMessage: `Connexion au salon ${normalizedPrivateCode}…`,
+    });
+  }
+
+  function handlePrivateJoinSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    joinPrivateRoom();
   }
 
   function submitGuess() {
@@ -1570,13 +1751,15 @@ export function PlayShell() {
           : "flex min-h-0 flex-1 flex-col",
         isLiveRound && !desktopKeyboardExpandsPage && "h-full overflow-hidden",
         fullscreenActive &&
-          "fixed inset-x-0 top-0 z-[80] w-screen overflow-hidden bg-[#040811]",
+          (isLiveRound
+            ? "fixed inset-x-0 top-0 z-[80] w-screen overflow-hidden bg-[#040811]"
+            : "fixed inset-x-0 top-0 z-[80] w-screen overflow-y-auto overscroll-contain bg-[#040811]"),
       )}
       style={fullscreenSurfaceStyle}
     >
       <GlassPanel
         className={clsx(
-          desktopKeyboardExpandsPage
+          desktopKeyboardExpandsPage || (fullscreenActive && !isLiveRound)
             ? "flex flex-col overflow-visible p-4 sm:p-5 md:p-6"
             : "flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-5 md:p-6",
           compactTouchRound && "p-2.5",
@@ -1586,7 +1769,7 @@ export function PlayShell() {
       >
         <div
           className={clsx(
-            desktopKeyboardExpandsPage
+            desktopKeyboardExpandsPage || (fullscreenActive && !isLiveRound)
               ? "grid items-stretch gap-6 lg:gap-8"
               : "flex-1 grid min-h-0 items-stretch gap-6 lg:gap-8",
             compactTouchRound && "gap-2.5",
@@ -1595,7 +1778,7 @@ export function PlayShell() {
         >
           <div
             className={clsx(
-              desktopKeyboardExpandsPage
+              desktopKeyboardExpandsPage || (fullscreenActive && !isLiveRound)
                 ? "min-w-0 flex flex-col gap-6"
                 : "min-w-0 flex min-h-0 flex-col gap-6",
               compactTouchRound && "gap-2.5",
@@ -1625,255 +1808,66 @@ export function PlayShell() {
             ) : null}
 
             {!sessionUser ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="min-w-0 rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
-                  <p className="eyebrow">Invité express</p>
-                  <h3 className="mt-3 font-display text-2xl text-white sm:text-3xl">
-                    Démarrer sans compte
-                  </h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">
-                    Une session locale se crée en un clic. Tu peux la convertir
-                    ensuite en compte, sans perdre ton profil.
-                  </p>
-                  <button
-                    className="button-primary mt-5 w-full"
-                    type="button"
-                    onClick={continueAsGuest}
-                    disabled={isPending || isBusy || pendingAction !== null}
-                  >
-                    {pendingAction === "guest"
-                      ? "Création de la session…"
-                      : "Continuer en invité"}
-                  </button>
-                </div>
-
-                <div className="min-w-0 rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
-                  <p className="eyebrow">Connexion</p>
-                  <h3 className="mt-3 font-display text-2xl text-white sm:text-3xl">
-                    Passkey ou email
-                  </h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">
-                    Reprends ta progression avec une passkey déjà enregistrée ou
-                    ton email et ton mot de passe.
-                  </p>
-                  <button
-                    className="button-secondary mt-5 w-full"
-                    type="button"
-                    onClick={signInWithPasskey}
-                    disabled={isPending || isBusy || pendingAction !== null}
-                  >
-                    {pendingAction === "passkeySignIn"
-                      ? "Connexion passkey…"
-                      : "Se connecter avec une passkey"}
-                  </button>
-                  <div className="mt-5 space-y-3">
-                    <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.28em] text-slate-500">
-                      <span className="h-px flex-1 bg-white/8" />
-                      <span>ou</span>
-                      <span className="h-px flex-1 bg-white/8" />
-                    </div>
-                    <form className="space-y-3" onSubmit={handleSignInSubmit}>
-                      <input
-                        className="input-shell"
-                        placeholder="email@domaine.com"
-                        type="email"
-                        value={emailInput}
-                        onChange={(event) => setEmailInput(event.target.value)}
-                        autoComplete="username webauthn"
-                      />
-                      <input
-                        className="input-shell"
-                        placeholder="Mot de passe"
-                        type="password"
-                        value={passwordInput}
-                        onChange={(event) =>
-                          setPasswordInput(event.target.value)
-                        }
-                        autoComplete="current-password"
-                      />
-                      <button
-                        className="button-primary w-full"
-                        type="submit"
-                        disabled={
-                          !emailInput || !passwordInput || isSubmittingSession
-                        }
-                      >
-                        {pendingAction === "signin"
-                          ? "Connexion…"
-                          : "Se connecter"}
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            ) : !roomSnapshot ? (
-              <div className="grid gap-5 xl:grid-cols-[1fr_0.92fr]">
-                <div className="min-w-0 space-y-5">
-                  <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="min-w-0 rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
+                    <p className="eyebrow">Invité express</p>
+                    <h3 className="mt-3 font-display text-2xl text-white sm:text-3xl">
+                      Démarrer sans compte
+                    </h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-300">
+                      Une session locale se crée en un clic. Tu peux la convertir
+                      ensuite en compte, sans perdre ton profil.
+                    </p>
                     <button
-                      className="button-primary relative z-10 w-full"
+                      className="button-primary mt-5 w-full"
                       type="button"
-                      onClick={() =>
-                        void connectToRoom("/api/game/public-ticket", {
-                          action: "public",
-                          pendingMessage: "Recherche d’un match public…",
-                        })
-                      }
-                      disabled={isBusy || isConnectingToRoom}
+                      onClick={continueAsGuest}
+                      disabled={isPending || isBusy || pendingAction !== null}
                     >
-                      {publicTicketPending
-                        ? "Recherche en cours…"
-                        : "Rejoindre le matchmaking"}
-                    </button>
-                    <button
-                      className="button-secondary relative z-10 w-full"
-                      type="button"
-                      onClick={() =>
-                        void connectToRoom("/api/game/private-ticket", {
-                          action: "private",
-                          pendingMessage: "Création du salon privé…",
-                        })
-                      }
-                      disabled={isBusy || isConnectingToRoom}
-                    >
-                      {privateTicketPending
-                        ? "Création du salon…"
-                        : "Créer un salon privé"}
+                      {pendingAction === "guest"
+                        ? "Création de la session…"
+                        : "Continuer en invité"}
                     </button>
                   </div>
 
-                  <p
-                    className="text-sm leading-6 text-slate-400"
-                    aria-live="polite"
-                  >
-                    {isConnectingToRoom
-                      ? "Connexion en cours. L’écran basculera dès que le salon répond."
-                      : "Public pour aller vite, privé pour inviter par code."}
-                  </p>
-
-                  <div className="rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
-                    <p className="eyebrow">Rejoindre avec un code</p>
-                    <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-                      <input
-                        className="input-shell"
-                        placeholder="AB12CD"
-                        value={privateCode}
-                        onChange={(event) =>
-                          setPrivateCode(event.target.value.toUpperCase())
-                        }
-                        autoCapitalize="characters"
-                        autoCorrect="off"
-                      />
-                      <button
-                        className="button-primary md:min-w-44"
-                        type="button"
-                        onClick={() =>
-                          void connectToRoom("/api/game/private-join", {
-                            action: "privateJoin",
-                            body: { roomCode: privateCode },
-                            pendingMessage: `Connexion au salon ${privateCode.trim().toUpperCase()}…`,
-                          })
-                        }
-                        disabled={!privateCode || isBusy || isConnectingToRoom}
-                      >
-                        {privateJoinPending
-                          ? "Connexion…"
-                          : "Entrer dans le salon"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="min-w-0 rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="eyebrow">Compte</p>
-                      <h3 className="mt-2 break-words font-display text-2xl text-white sm:text-3xl">
-                        {sessionUser.name}
-                      </h3>
-                      <p className="mt-2 break-all text-sm text-slate-300">
-                        {sessionUser.email}
-                      </p>
-                    </div>
-                    <MetricBadge
-                      label="Type"
-                      value={sessionUser.isAnonymous ? "Invité" : "Compte"}
-                    />
-                  </div>
-
-                  <div className="mt-5 grid grid-cols-2 gap-2">
+                  <div className="min-w-0 rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
+                    <p className="eyebrow">Connexion</p>
+                    <h3 className="mt-3 font-display text-2xl text-white sm:text-3xl">
+                      Passkey ou email
+                    </h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-300">
+                      Reprends ta progression avec une passkey déjà enregistrée ou
+                      ton email et ton mot de passe.
+                    </p>
                     <button
-                      className="button-secondary flex-1"
+                      className="button-secondary mt-5 w-full"
                       type="button"
-                      onClick={() => setAuthMode("upgrade")}
+                      onClick={signInWithPasskey}
+                      disabled={isPending || isBusy || pendingAction !== null}
                     >
-                      Créer un compte
+                      {pendingAction === "passkeySignIn"
+                        ? "Connexion passkey…"
+                        : "Se connecter avec une passkey"}
                     </button>
-                    <button
-                      className="button-secondary flex-1"
-                      type="button"
-                      onClick={() => setAuthMode("signin")}
-                    >
-                      Me connecter
-                    </button>
-                  </div>
-
-                  <div className="mt-5 space-y-3">
-                    {authMode === "upgrade" ? (
-                      <form
-                        className="space-y-3"
-                        onSubmit={handleUpgradeSubmit}
-                      >
-                        <input
-                          className="input-shell"
-                          placeholder="Nom affiché"
-                          value={nameInput}
-                          onChange={(event) => setNameInput(event.target.value)}
-                          autoComplete="nickname"
-                        />
-                        <input
-                          className="input-shell"
-                          placeholder="email@domaine.com"
-                          type="email"
-                          value={emailInput}
-                          onChange={(event) =>
-                            setEmailInput(event.target.value)
-                          }
-                          autoComplete="username webauthn"
-                        />
-                        <input
-                          className="input-shell"
-                          placeholder="Mot de passe"
-                          type="password"
-                          value={passwordInput}
-                          onChange={(event) =>
-                            setPasswordInput(event.target.value)
-                          }
-                          autoComplete="new-password"
-                        />
-                        <button
-                          className="button-primary w-full"
-                          type="submit"
-                          disabled={
-                            !emailInput || !passwordInput || isSubmittingSession
-                          }
-                        >
-                          {pendingAction === "upgrade"
-                            ? "Création…"
-                            : "Créer ou lier mon compte"}
-                        </button>
-                      </form>
-                    ) : (
+                    <div className="mt-5 space-y-3">
+                      <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.28em] text-slate-500">
+                        <span className="h-px flex-1 bg-white/8" />
+                        <span>ou</span>
+                        <span className="h-px flex-1 bg-white/8" />
+                      </div>
                       <form className="space-y-3" onSubmit={handleSignInSubmit}>
                         <input
                           className="input-shell"
                           placeholder="email@domaine.com"
                           type="email"
                           value={emailInput}
-                          onChange={(event) =>
-                            setEmailInput(event.target.value)
+                          onChange={(event) => setEmailInput(event.target.value)}
+                          onKeyDown={(event) =>
+                            triggerSubmitOnEnter(event, () => void signInEmail())
                           }
-                          autoComplete="email"
+                          autoComplete="username webauthn"
+                          enterKeyHint="next"
                         />
                         <input
                           className="input-shell"
@@ -1883,13 +1877,17 @@ export function PlayShell() {
                           onChange={(event) =>
                             setPasswordInput(event.target.value)
                           }
+                          onKeyDown={(event) =>
+                            triggerSubmitOnEnter(event, () => void signInEmail())
+                          }
                           autoComplete="current-password"
+                          enterKeyHint="done"
                         />
                         <button
                           className="button-primary w-full"
                           type="submit"
                           disabled={
-                            !emailInput || !passwordInput || isSubmittingSession
+                            !emailInput.trim() || !passwordInput || isSubmittingSession
                           }
                         >
                           {pendingAction === "signin"
@@ -1897,21 +1895,269 @@ export function PlayShell() {
                             : "Se connecter"}
                         </button>
                       </form>
-                    )}
+                    </div>
+                  </div>
+                </div>
 
-                    <PasskeyPanel className="mt-2" />
+                {showSystemStatusNote ? (
+                  <SystemStatusPanel
+                    message={statusMessage}
+                    tone={systemStatusTone}
+                  />
+                ) : null}
+              </div>
+            ) : !roomSnapshot ? (
+              <div className="space-y-5">
+                {showSystemStatusNote ? (
+                  <SystemStatusPanel
+                    message={statusMessage}
+                    tone={systemStatusTone}
+                  />
+                ) : null}
 
-                    <div className="grid gap-3 sm:grid-cols-1">
+                <div className="grid gap-5 xl:grid-cols-[1fr_0.92fr]">
+                  <div className="min-w-0 space-y-5">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <button
-                        className="button-danger w-full"
+                        className="button-primary relative z-10 w-full"
                         type="button"
-                        onClick={signOut}
-                        disabled={pendingAction === "signOut"}
+                        onClick={() =>
+                          void connectToRoom("/api/game/public-ticket", {
+                            action: "public",
+                            pendingMessage: "Recherche d’un match public…",
+                          })
+                        }
+                        disabled={isBusy || isConnectingToRoom}
                       >
-                        {pendingAction === "signOut"
-                          ? "Déconnexion…"
-                          : "Se déconnecter"}
+                        {publicTicketPending
+                          ? "Recherche en cours…"
+                          : "Rejoindre le matchmaking"}
                       </button>
+                      <button
+                        className="button-secondary relative z-10 w-full"
+                        type="button"
+                        onClick={() =>
+                          void connectToRoom("/api/game/private-ticket", {
+                            action: "private",
+                            pendingMessage: "Création du salon privé…",
+                          })
+                        }
+                        disabled={isBusy || isConnectingToRoom}
+                      >
+                        {privateTicketPending
+                          ? "Création du salon…"
+                          : "Créer un salon privé"}
+                      </button>
+                    </div>
+
+                    <p
+                      className="text-sm leading-6 text-slate-400"
+                      aria-live="polite"
+                    >
+                      {isConnectingToRoom
+                        ? "Connexion en cours. L’écran basculera dès que le salon répond."
+                        : "Public pour aller vite, privé pour inviter par code."}
+                    </p>
+
+                    <div className="rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
+                      <p className="eyebrow">Rejoindre avec un code</p>
+                      <form
+                        className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
+                        onSubmit={handlePrivateJoinSubmit}
+                      >
+                        <input
+                          className="input-shell"
+                          placeholder="AB12CD"
+                          value={privateCode}
+                          onChange={(event) =>
+                            setPrivateCode(
+                              normalizePrivateCodeInput(event.target.value),
+                            )
+                          }
+                          onKeyDown={(event) =>
+                            triggerSubmitOnEnter(event, joinPrivateRoom)
+                          }
+                          autoCapitalize="characters"
+                          autoCorrect="off"
+                          autoComplete="off"
+                          enterKeyHint="go"
+                          maxLength={8}
+                        />
+                        <button
+                          className="button-primary md:min-w-44"
+                          type="submit"
+                          disabled={
+                            normalizedPrivateCode.length < 4 ||
+                            isBusy ||
+                            isConnectingToRoom
+                          }
+                        >
+                          {privateJoinPending
+                            ? "Connexion…"
+                            : "Entrer dans le salon"}
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 rounded-[26px] border border-white/8 bg-white/[0.03] p-4 sm:p-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="eyebrow">Compte</p>
+                        <h3 className="mt-2 break-words font-display text-2xl text-white sm:text-3xl">
+                          {sessionUser.name}
+                        </h3>
+                        <p className="mt-2 break-all text-sm text-slate-300">
+                          {sessionUser.email}
+                        </p>
+                      </div>
+                      <MetricBadge
+                        label="Type"
+                        value={sessionUser.isAnonymous ? "Invité" : "Compte"}
+                      />
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-2">
+                      <button
+                        className="button-secondary flex-1"
+                        type="button"
+                        onClick={() => setAuthMode("upgrade")}
+                      >
+                        Créer un compte
+                      </button>
+                      <button
+                        className="button-secondary flex-1"
+                        type="button"
+                        onClick={() => setAuthMode("signin")}
+                      >
+                        Me connecter
+                      </button>
+                    </div>
+
+                    <div className="mt-5 space-y-3">
+                      {authMode === "upgrade" ? (
+                        <form
+                          className="space-y-3"
+                          onSubmit={handleUpgradeSubmit}
+                        >
+                          <input
+                            className="input-shell"
+                            placeholder="Nom affiché"
+                            value={nameInput}
+                            onChange={(event) =>
+                              setNameInput(event.target.value)
+                            }
+                            onKeyDown={(event) =>
+                              triggerSubmitOnEnter(event, () => void signUpEmail())
+                            }
+                            autoComplete="nickname"
+                            enterKeyHint="next"
+                          />
+                          <input
+                            className="input-shell"
+                            placeholder="email@domaine.com"
+                            type="email"
+                            value={emailInput}
+                            onChange={(event) =>
+                              setEmailInput(event.target.value)
+                            }
+                            onKeyDown={(event) =>
+                              triggerSubmitOnEnter(event, () => void signUpEmail())
+                            }
+                            autoComplete="username webauthn"
+                            enterKeyHint="next"
+                          />
+                          <input
+                            className="input-shell"
+                            placeholder="Mot de passe"
+                            type="password"
+                            value={passwordInput}
+                            onChange={(event) =>
+                              setPasswordInput(event.target.value)
+                            }
+                            onKeyDown={(event) =>
+                              triggerSubmitOnEnter(event, () => void signUpEmail())
+                            }
+                            autoComplete="new-password"
+                            enterKeyHint="done"
+                          />
+                          <button
+                            className="button-primary w-full"
+                            type="submit"
+                            disabled={
+                              !emailInput.trim() ||
+                              !passwordInput ||
+                              isSubmittingSession
+                            }
+                          >
+                            {pendingAction === "upgrade"
+                              ? "Création…"
+                              : "Créer ou lier mon compte"}
+                          </button>
+                        </form>
+                      ) : (
+                        <form
+                          className="space-y-3"
+                          onSubmit={handleSignInSubmit}
+                        >
+                          <input
+                            className="input-shell"
+                            placeholder="email@domaine.com"
+                            type="email"
+                            value={emailInput}
+                            onChange={(event) =>
+                              setEmailInput(event.target.value)
+                            }
+                            onKeyDown={(event) =>
+                              triggerSubmitOnEnter(event, () => void signInEmail())
+                            }
+                            autoComplete="email"
+                            enterKeyHint="next"
+                          />
+                          <input
+                            className="input-shell"
+                            placeholder="Mot de passe"
+                            type="password"
+                            value={passwordInput}
+                            onChange={(event) =>
+                              setPasswordInput(event.target.value)
+                            }
+                            onKeyDown={(event) =>
+                              triggerSubmitOnEnter(event, () => void signInEmail())
+                            }
+                            autoComplete="current-password"
+                            enterKeyHint="done"
+                          />
+                          <button
+                            className="button-primary w-full"
+                            type="submit"
+                            disabled={
+                              !emailInput.trim() ||
+                              !passwordInput ||
+                              isSubmittingSession
+                            }
+                          >
+                            {pendingAction === "signin"
+                              ? "Connexion…"
+                              : "Se connecter"}
+                          </button>
+                        </form>
+                      )}
+
+                      <PasskeyPanel className="mt-2" />
+
+                      <div className="grid gap-3 sm:grid-cols-1">
+                        <button
+                          className="button-danger w-full"
+                          type="button"
+                          onClick={signOut}
+                          disabled={pendingAction === "signOut"}
+                        >
+                          {pendingAction === "signOut"
+                            ? "Déconnexion…"
+                            : "Se déconnecter"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2914,6 +3160,30 @@ function InlineMetaPill(props: {
       </span>
       <strong className="font-semibold text-white">{props.value}</strong>
     </span>
+  );
+}
+
+function SystemStatusPanel(props: {
+  readonly message: string;
+  readonly tone: SystemStatusTone;
+}) {
+  return (
+    <div
+      className={clsx(
+        "rounded-[22px] border px-4 py-3",
+        props.tone === "error" &&
+          "border-rose-300/25 bg-rose-400/10 text-rose-50",
+        props.tone === "success" &&
+          "border-cyan-300/20 bg-cyan-300/10 text-cyan-50",
+        props.tone === "info" &&
+          "border-white/8 bg-slate-950/40 text-slate-200",
+      )}
+    >
+      <p className="eyebrow">Retour système</p>
+      <p className="mt-2 text-sm leading-6" aria-live="polite">
+        {props.message}
+      </p>
+    </div>
   );
 }
 
