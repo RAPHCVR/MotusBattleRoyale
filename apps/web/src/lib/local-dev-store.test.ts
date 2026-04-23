@@ -6,6 +6,7 @@ import { beforeEach, afterEach, describe, expect, it } from "vitest";
 
 import {
   getLocalDevLeaderboard,
+  getLocalDevLeaderboardSnapshot,
   mergeLocalDevPlayerProfiles,
 } from "./local-dev-store";
 
@@ -75,5 +76,79 @@ describe("local dev store", () => {
     await writeFile(storePath, "{broken-json", "utf8");
 
     await expect(getLocalDevLeaderboard(10)).resolves.toEqual([]);
+  });
+
+  it("splits qualified and provisional profiles with a minimum match threshold", async () => {
+    await writeFile(
+      storePath,
+      JSON.stringify(
+        {
+          playerProfiles: [
+            {
+              userId: "qualified",
+              displayName: "Qualified Nova",
+              avatarSeed: "qualified-seed",
+              mmr: 1220,
+              wins: 2,
+              matchesPlayed: 6,
+              bestFinish: 1,
+            },
+            {
+              userId: "provisional",
+              displayName: "Provisional Nova",
+              avatarSeed: "provisional-seed",
+              mmr: 1250,
+              wins: 1,
+              matchesPlayed: 2,
+              bestFinish: 1,
+            },
+            {
+              userId: "fresh",
+              displayName: "Fresh Nova",
+              avatarSeed: "fresh-seed",
+              mmr: 1200,
+              wins: 0,
+              matchesPlayed: 0,
+              bestFinish: null,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    await expect(
+      getLocalDevLeaderboardSnapshot({
+        minimumMatches: 5,
+        establishedLimit: 10,
+        provisionalLimit: 10,
+      }),
+    ).resolves.toEqual({
+      established: [
+        {
+          userId: "qualified",
+          displayName: "Qualified Nova",
+          avatarSeed: "qualified-seed",
+          mmr: 1220,
+          wins: 2,
+          matchesPlayed: 6,
+          bestFinish: 1,
+        },
+      ],
+      provisional: [
+        {
+          userId: "provisional",
+          displayName: "Provisional Nova",
+          avatarSeed: "provisional-seed",
+          mmr: 1250,
+          wins: 1,
+          matchesPlayed: 2,
+          bestFinish: 1,
+        },
+      ],
+      minimumMatches: 5,
+    });
   });
 });

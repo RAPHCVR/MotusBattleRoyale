@@ -74,7 +74,7 @@ describe("player profile migration", () => {
     expect(mocks.mergeLocalDevPlayerProfiles).not.toHaveBeenCalled();
   });
 
-  it("only includes profiles with at least one played match in the leaderboard query", async () => {
+  it("only includes qualified profiles in the leaderboard query", async () => {
     mocks.poolQuery.mockResolvedValue({
       rows: [
         {
@@ -94,9 +94,9 @@ describe("player profile migration", () => {
 
     expect(mocks.poolQuery).toHaveBeenCalledTimes(1);
     expect(String(mocks.poolQuery.mock.calls[0]?.[0])).toContain(
-      "WHERE matches_played > 0",
+      "WHERE matches_played >= $2",
     );
-    expect(mocks.poolQuery.mock.calls[0]?.[1]).toEqual([10]);
+    expect(mocks.poolQuery.mock.calls[0]?.[1]).toEqual([10, 5]);
     expect(leaderboard).toEqual([
       {
         userId: "active-user",
@@ -108,5 +108,74 @@ describe("player profile migration", () => {
         bestFinish: 1,
       },
     ]);
+  });
+
+  it("builds separate established and provisional leaderboard buckets", async () => {
+    mocks.poolQuery
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            user_id: "qualified-user",
+            display_name: "Qualified Nova",
+            avatar_seed: "qualified-seed",
+            mmr: 1234,
+            wins: 3,
+            matches_played: 7,
+            best_finish: 1,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            user_id: "provisional-user",
+            display_name: "Provisional Nova",
+            avatar_seed: "provisional-seed",
+            mmr: 1218,
+            wins: 1,
+            matches_played: 3,
+            best_finish: 2,
+          },
+        ],
+      });
+
+    const {
+      getLeaderboardSnapshot,
+      LEADERBOARD_MIN_MATCHES,
+    } = await import("./player-profile");
+    const snapshot = await getLeaderboardSnapshot();
+
+    expect(mocks.poolQuery).toHaveBeenCalledTimes(2);
+    expect(String(mocks.poolQuery.mock.calls[0]?.[0])).toContain(
+      "WHERE matches_played >= $2",
+    );
+    expect(String(mocks.poolQuery.mock.calls[1]?.[0])).toContain(
+      "WHERE matches_played > 0 AND matches_played < $2",
+    );
+    expect(snapshot).toEqual({
+      established: [
+        {
+          userId: "qualified-user",
+          displayName: "Qualified Nova",
+          avatarSeed: "qualified-seed",
+          mmr: 1234,
+          wins: 3,
+          matchesPlayed: 7,
+          bestFinish: 1,
+        },
+      ],
+      provisional: [
+        {
+          userId: "provisional-user",
+          displayName: "Provisional Nova",
+          avatarSeed: "provisional-seed",
+          mmr: 1218,
+          wins: 1,
+          matchesPlayed: 3,
+          bestFinish: 2,
+        },
+      ],
+      minimumMatches: LEADERBOARD_MIN_MATCHES,
+    });
   });
 });

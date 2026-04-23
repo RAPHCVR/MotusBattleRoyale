@@ -3,7 +3,11 @@ import Link from "next/link";
 import { GlassPanel, MetricBadge, SectionHeader } from "@motus/ui";
 
 import { PasskeyPanel } from "@/components/passkey-panel";
-import { ensurePlayerProfile } from "@/lib/player-profile";
+import {
+  LEADERBOARD_MIN_MATCHES,
+  ensurePlayerProfile,
+  isLeaderboardQualified,
+} from "@/lib/player-profile";
 import { getServerSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +15,12 @@ export const dynamic = "force-dynamic";
 export default async function ProfilePage() {
   const session = await getServerSession();
   const profile = session ? await ensurePlayerProfile(session.user) : null;
+  const leaderboardQualified = profile
+    ? isLeaderboardQualified(profile.matchesPlayed)
+    : false;
+  const leaderboardMatchesRemaining = profile
+    ? Math.max(0, LEADERBOARD_MIN_MATCHES - profile.matchesPlayed)
+    : LEADERBOARD_MIN_MATCHES;
 
   return (
     <div className="page-shell space-y-5 py-6 md:py-8">
@@ -37,6 +47,15 @@ export default async function ProfilePage() {
             <MetricBadge label="MMR" value={profile.mmr} tone="good" />
             <MetricBadge label="Wins" value={profile.wins} />
             <MetricBadge label="Best" value={profile.bestFinish ?? "-"} />
+            <MetricBadge
+              label="Leaderboard"
+              value={
+                leaderboardQualified
+                  ? "Qualifie"
+                  : `${profile.matchesPlayed}/${LEADERBOARD_MIN_MATCHES}`
+              }
+              tone={leaderboardQualified ? "good" : "default"}
+            />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -59,6 +78,11 @@ export default async function ProfilePage() {
               <p className="mt-4 text-sm leading-6 text-slate-400">
                 Le seed avatar et le nom affiché sont stockés côté backend puis réutilisés par le serveur de jeu pour les
                 tickets et le classement.
+              </p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                {leaderboardQualified
+                  ? `Ton profil est qualifie pour le leaderboard public.`
+                  : `Encore ${leaderboardMatchesRemaining} match${leaderboardMatchesRemaining > 1 ? "s" : ""} pour entrer dans le leaderboard public.`}
               </p>
             </div>
           </div>

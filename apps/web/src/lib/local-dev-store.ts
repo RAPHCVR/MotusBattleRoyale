@@ -24,6 +24,12 @@ interface LocalDevStoreData {
   playerProfiles: LocalDevPlayerProfile[];
 }
 
+export interface LocalDevLeaderboardSnapshot {
+  established: LocalDevPlayerProfile[];
+  provisional: LocalDevPlayerProfile[];
+  minimumMatches: number;
+}
+
 const DEFAULT_STORE_DATA: LocalDevStoreData = {
   playerProfiles: [],
 };
@@ -80,8 +86,66 @@ function sortProfiles(profiles: LocalDevPlayerProfile[]) {
       return right.wins - left.wins;
     }
 
-    return right.matchesPlayed - left.matchesPlayed;
+    if (left.matchesPlayed !== right.matchesPlayed) {
+      return right.matchesPlayed - left.matchesPlayed;
+    }
+
+    if (left.bestFinish == null && right.bestFinish != null) {
+      return 1;
+    }
+
+    if (left.bestFinish != null && right.bestFinish == null) {
+      return -1;
+    }
+
+    if (
+      left.bestFinish != null &&
+      right.bestFinish != null &&
+      left.bestFinish !== right.bestFinish
+    ) {
+      return left.bestFinish - right.bestFinish;
+    }
+
+    const displayNameOrder = left.displayName.localeCompare(
+      right.displayName,
+      "fr",
+    );
+
+    if (displayNameOrder !== 0) {
+      return displayNameOrder;
+    }
+
+    return left.userId.localeCompare(right.userId, "fr");
   });
+}
+
+function buildLeaderboardSnapshot(
+  profiles: LocalDevPlayerProfile[],
+  minimumMatches: number,
+  establishedLimit: number,
+  provisionalLimit: number,
+): LocalDevLeaderboardSnapshot {
+  const sortedProfiles = sortProfiles(profiles);
+
+  return {
+    established: sortedProfiles
+      .filter((profile) => profile.matchesPlayed >= minimumMatches)
+      .slice(0, establishedLimit),
+    provisional: sortedProfiles
+      .filter(
+        (profile) =>
+          profile.matchesPlayed > 0 && profile.matchesPlayed < minimumMatches,
+      )
+      .sort((left, right) => {
+        if (left.matchesPlayed !== right.matchesPlayed) {
+          return right.matchesPlayed - left.matchesPlayed;
+        }
+
+        return sortProfiles([left, right])[0] === left ? -1 : 1;
+      })
+      .slice(0, provisionalLimit),
+    minimumMatches,
+  };
 }
 
 function sleep(durationMs: number) {
@@ -232,7 +296,24 @@ export async function upsertLocalDevPlayerProfile(input: {
 
 export async function getLocalDevLeaderboard(limit = 24) {
   const store = await readStore();
-  return sortProfiles(store.playerProfiles).slice(0, limit);
+  return sortProfiles(store.playerProfiles)
+    .filter((profile) => profile.matchesPlayed > 0)
+    .slice(0, limit);
+}
+
+export async function getLocalDevLeaderboardSnapshot(input?: {
+  establishedLimit?: number;
+  provisionalLimit?: number;
+  minimumMatches?: number;
+}) {
+  const store = await readStore();
+
+  return buildLeaderboardSnapshot(
+    store.playerProfiles,
+    input?.minimumMatches ?? 5,
+    input?.establishedLimit ?? 24,
+    input?.provisionalLimit ?? 8,
+  );
 }
 
 export async function mergeLocalDevPlayerProfiles(

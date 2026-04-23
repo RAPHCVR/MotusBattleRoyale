@@ -5,6 +5,7 @@ import { env } from "./env";
 import { pgPool } from "./db";
 import {
   getLocalDevLeaderboard,
+  getLocalDevLeaderboardSnapshot,
   isLocalDatabaseConnectionError,
   mergeLocalDevPlayerProfiles,
   upsertLocalDevPlayerProfile,
@@ -18,6 +19,45 @@ export interface PlayerProfile {
   wins: number;
   matchesPlayed: number;
   bestFinish: number | null;
+}
+
+export interface LeaderboardSnapshot {
+  established: PlayerProfile[];
+  provisional: PlayerProfile[];
+  minimumMatches: number;
+}
+
+export const LEADERBOARD_MIN_MATCHES = 5;
+
+function isPositiveInteger(value: number) {
+  return Number.isInteger(value) && value > 0;
+}
+
+function mapPlayerProfile(row: {
+  user_id: string;
+  display_name: string;
+  avatar_seed: string;
+  mmr: number;
+  wins: number;
+  matches_played: number;
+  best_finish: number | null;
+}): PlayerProfile {
+  return {
+    userId: row.user_id,
+    displayName: row.display_name,
+    avatarSeed: row.avatar_seed,
+    mmr: row.mmr,
+    wins: row.wins,
+    matchesPlayed: row.matches_played,
+    bestFinish: row.best_finish,
+  };
+}
+
+export function isLeaderboardQualified(
+  matchesPlayed: number,
+  minimumMatches = LEADERBOARD_MIN_MATCHES,
+) {
+  return matchesPlayed >= minimumMatches;
 }
 
 export async function ensurePlayerProfile(user: {
@@ -51,15 +91,7 @@ export async function ensurePlayerProfile(user: {
     );
 
     const row = result.rows[0];
-    return {
-      userId: row.user_id,
-      displayName: row.display_name,
-      avatarSeed: row.avatar_seed,
-      mmr: row.mmr,
-      wins: row.wins,
-      matchesPlayed: row.matches_played,
-      bestFinish: row.best_finish,
-    };
+    return mapPlayerProfile(row);
   } catch (error) {
     if (
       env.LOCAL_STORAGE_FALLBACK_ENABLED &&
@@ -76,7 +108,14 @@ export async function ensurePlayerProfile(user: {
   }
 }
 
-export async function getLeaderboard(limit = 24): Promise<PlayerProfile[]> {
+export async function getLeaderboard(
+  limit = 24,
+  minimumMatches = LEADERBOARD_MIN_MATCHES,
+): Promise<PlayerProfile[]> {
+  if (!isPositiveInteger(limit)) {
+    return [];
+  }
+
   try {
     const result = await pgPool.query<{
       user_id: string;
@@ -90,7 +129,7 @@ export async function getLeaderboard(limit = 24): Promise<PlayerProfile[]> {
       `
         SELECT user_id, display_name, avatar_seed, mmr, wins, matches_played, best_finish
         FROM player_profile
-        WHERE matches_played > 0
+        WHERE matches_played >= $2
         ORDER BY
           mmr DESC,
           wins DESC,
@@ -100,24 +139,118 @@ export async function getLeaderboard(limit = 24): Promise<PlayerProfile[]> {
           user_id ASC
         LIMIT $1
       `,
-      [limit],
+      [limit, minimumMatches],
     );
 
-    return result.rows.map((row) => ({
-      userId: row.user_id,
-      displayName: row.display_name,
-      avatarSeed: row.avatar_seed,
-      mmr: row.mmr,
-      wins: row.wins,
-      matchesPlayed: row.matches_played,
-      bestFinish: row.best_finish,
-    }));
+    return result.rows.map(mapPlayerProfile);
   } catch (error) {
     if (
       env.LOCAL_STORAGE_FALLBACK_ENABLED &&
       isLocalDatabaseConnectionError(error)
     ) {
-      return getLocalDevLeaderboard(limit);
+      const snapshot = await getLocalDevLeaderboardSnapshot({
+        establishedLimit: limit,
+        provisionalLimit: 1,
+        minimumMatches,
+      });
+
+      return snapshot.established;
+    }
+
+    throw error;
+  }
+}
+
+export async function getLeaderboardSnapshot(input?: {
+  establishedLimit?: number;
+  provisionalLimit?: number;
+  minimumMatches?: number;
+}): Promise<LeaderboardSnapshot> {
+  const establishedLimit = input?.establishedLimit ?? 24;
+  const provisionalLimit = input?.provisionalLimit ?? 8;
+  const minimumMatches = input?.minimumMatches ?? LEADERBOARD_MIN_MATCHES;
+
+  if (!isPositiveInteger(establishedLimit) || !isPositiveInteger(provisionalLimit)) {
+    return {
+      established: [],
+      provisional: [],
+      minimumMatches,
+    };
+  }
+
+  try {
+    const [establishedResult, provisionalResult] = await Promise.all([
+      pgPool.query<{
+        user_id: string;
+        display_name: string;
+        avatar_seed: string;
+        mmr: number;
+        wins: number;
+        matches_played: number;
+        best_finish: number | null;
+      }>(
+        `
+          SELECT user_id, display_name, avatar_seed, mmr, wins, matches_played, best_finish
+          FROM player_profile
+          WHERE matches_played >= $2
+          ORDER BY
+            mmr DESC,
+            wins DESC,
+            matches_played DESC,
+            best_finish ASC NULLS LAST,
+            display_name ASC,
+            user_id ASC
+          LIMIT $1
+        `,
+        [establishedLimit, minimumMatches],
+      ),
+      pgPool.query<{
+        user_id: string;
+        display_name: string;
+        avatar_seed: string;
+        mmr: number;
+        wins: number;
+        matches_played: number;
+        best_finish: number | null;
+      }>(
+        `
+          SELECT user_id, display_name, avatar_seed, mmr, wins, matches_played, best_finish
+          FROM player_profile
+          WHERE matches_played > 0 AND matches_played < $2
+          ORDER BY
+            matches_played DESC,
+            mmr DESC,
+            wins DESC,
+            best_finish ASC NULLS LAST,
+            display_name ASC,
+            user_id ASC
+          LIMIT $1
+        `,
+        [provisionalLimit, minimumMatches],
+      ),
+    ]);
+
+    return {
+      established: establishedResult.rows.map(mapPlayerProfile),
+      provisional: provisionalResult.rows.map(mapPlayerProfile),
+      minimumMatches,
+    };
+  } catch (error) {
+    if (
+      env.LOCAL_STORAGE_FALLBACK_ENABLED &&
+      isLocalDatabaseConnectionError(error)
+    ) {
+      const snapshot = await getLocalDevLeaderboardSnapshot({
+        establishedLimit,
+        provisionalLimit,
+        minimumMatches,
+      });
+
+      return {
+        established: snapshot.established,
+        provisional: snapshot.provisional,
+        minimumMatches: snapshot.minimumMatches,
+      };
     }
 
     throw error;
