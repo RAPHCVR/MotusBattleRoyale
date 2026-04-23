@@ -46,10 +46,10 @@ WORKDIR /app
 COPY --from=builder --chown=node:node /prod ./
 
 # Verify the runtime tree from the game package root.
-RUN node -e "console.log(require.resolve('express'))"
+RUN node -e "const { existsSync } = require('node:fs'); const { createRequire } = require('node:module'); let lastError; for (const root of ['/app', '/app/apps/game']) { if (!existsSync(root + '/dist/index.js') || !existsSync(root + '/package.json')) continue; try { const requireFromRoot = createRequire(root + '/package.json'); console.log(requireFromRoot.resolve('express')); process.exit(0); } catch (error) { lastError = error; } } throw lastError ?? new Error('Cannot find game runtime entrypoint');"
 
 EXPOSE 2567
 
 USER node
 
-CMD ["node", "--enable-source-maps", "dist/index.js"]
+CMD ["sh", "-c", "if [ -f dist/index.js ]; then exec node --enable-source-maps dist/index.js; fi; cd apps/game && exec node --enable-source-maps dist/index.js"]
