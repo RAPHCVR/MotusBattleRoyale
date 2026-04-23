@@ -29,6 +29,11 @@ import {
 } from "@motus/protocol";
 
 import { verifyGameToken } from "../lib/auth.js";
+import {
+  computeLobbyAnchorMmr,
+  computeMatchMmrDeltas,
+  DEFAULT_MMR,
+} from "../lib/rating.js";
 import { persistMatchResult, type PersistedPlayerResult, type PersistedRoundRecord } from "../lib/store.js";
 import { MotusRoomState, PlayerState } from "../state/GameState.js";
 
@@ -67,7 +72,7 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
   private matchSeed = "";
   private matchStarted = false;
   private roomCode = "";
-  private anchorMmr = 1200;
+  private anchorMmr = DEFAULT_MMR;
   private rounds = createMatchRounds("bootstrap-seed");
 
   async onCreate(options: { hostUserId?: string; roomCode?: string; seed?: string; anchorMmr?: number }): Promise<void> {
@@ -214,6 +219,8 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
   }
 
   protected async afterRosterChange(): Promise<void> {
+    this.refreshAnchorMmr();
+
     if (!this.matchStarted) {
       this.ensurePreMatchPhase();
       this.updateAutoCountdown();
@@ -481,6 +488,14 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
 
     const standings = this.sortedPlayers();
     const winner = standings[0];
+    const mmrDeltas = computeMatchMmrDeltas(
+      standings.map((player, index) => ({
+        userId: player.userId,
+        placement: index + 1,
+        mmrBefore:
+          this.runtimePlayers.get(player.userId)?.mmrBefore ?? DEFAULT_MMR,
+      })),
+    );
 
     if (winner) {
       this.state.winnerUserId = winner.userId;
@@ -488,8 +503,8 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
 
     const results: PersistedPlayerResult[] = standings.map((player, index) => {
       const runtime = this.runtimePlayers.get(player.userId);
-      const mmrDelta = this.computeMmrDelta(index + 1, standings.length);
-      const mmrBefore = runtime?.mmrBefore ?? 1_200;
+      const mmrDelta = mmrDeltas.get(player.userId) ?? 0;
+      const mmrBefore = runtime?.mmrBefore ?? DEFAULT_MMR;
       const mmrAfter = mmrBefore + mmrDelta;
 
       if (runtime) {
@@ -551,22 +566,6 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
     this.transitionTimer = this.clock.setTimeout(() => {
       void this.disconnect();
     }, 25_000);
-  }
-
-  protected computeMmrDelta(placement: number, fieldSize: number): number {
-    if (placement === 1) {
-      return 24;
-    }
-
-    if (placement <= 4) {
-      return 10;
-    }
-
-    if (placement >= Math.max(5, fieldSize - Math.floor(fieldSize / 4))) {
-      return -10;
-    }
-
-    return 2;
   }
 
   protected async handleGuess(client: GameClient, payload: { value?: string }): Promise<void> {
@@ -852,5 +851,14 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
       private: this.roomKind === "private",
       maxClients: ROOM_MAX_PLAYERS
     });
+  }
+
+  private refreshAnchorMmr() {
+    const currentRatings = [...this.state.players.values()]
+      .filter((player) => player.status !== "left")
+      .map((player) => this.runtimePlayers.get(player.userId)?.mmrBefore)
+      .filter((mmr): mmr is number => typeof mmr === "number");
+
+    this.anchorMmr = computeLobbyAnchorMmr(currentRatings, this.anchorMmr);
   }
 }

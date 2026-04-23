@@ -121,6 +121,10 @@ export async function migrateAnonymousProfile(
   fromUserId: string,
   toUserId: string,
 ): Promise<void> {
+  if (fromUserId === toUserId) {
+    return;
+  }
+
   try {
     const client: PoolClient = await pgPool.connect();
 
@@ -150,7 +154,50 @@ export async function migrateAnonymousProfile(
         fromUserId,
       ]);
       await client.query(
-        `UPDATE match_player SET user_id = $2 WHERE user_id = $1`,
+        `
+        INSERT INTO match_player (
+          match_id,
+          user_id,
+          display_name,
+          avatar_seed,
+          placement,
+          score,
+          solved_rounds,
+          clue_used,
+          mmr_before,
+          mmr_after
+        )
+        SELECT
+          match_id,
+          $2,
+          display_name,
+          avatar_seed,
+          placement,
+          score,
+          solved_rounds,
+          clue_used,
+          mmr_before,
+          mmr_after
+        FROM match_player
+        WHERE user_id = $1
+        ON CONFLICT (match_id, user_id)
+        DO UPDATE SET
+          display_name = EXCLUDED.display_name,
+          avatar_seed = EXCLUDED.avatar_seed,
+          placement = LEAST(match_player.placement, EXCLUDED.placement),
+          score = GREATEST(match_player.score, EXCLUDED.score),
+          solved_rounds = GREATEST(match_player.solved_rounds, EXCLUDED.solved_rounds),
+          clue_used = match_player.clue_used OR EXCLUDED.clue_used,
+          mmr_before = LEAST(match_player.mmr_before, EXCLUDED.mmr_before),
+          mmr_after = GREATEST(match_player.mmr_after, EXCLUDED.mmr_after)
+      `,
+        [fromUserId, toUserId],
+      );
+      await client.query(`DELETE FROM match_player WHERE user_id = $1`, [
+        fromUserId,
+      ]);
+      await client.query(
+        `UPDATE round_result SET user_id = $2 WHERE user_id = $1`,
         [fromUserId, toUserId],
       );
       await client.query(
