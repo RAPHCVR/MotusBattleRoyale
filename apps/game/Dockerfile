@@ -26,6 +26,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts --package-import-method=copy
 COPY . .
 
 RUN pnpm --filter @motus/game build
+RUN pnpm --filter @motus/game --prod deploy --legacy /prod
 
 FROM base AS runner
 
@@ -42,9 +43,7 @@ ENV PORT=2567
 
 WORKDIR /app
 
-COPY --from=builder --chown=node:node /app /app
-
-WORKDIR /app/apps/game
+COPY --from=builder --chown=node:node /prod ./
 
 # Verify the runtime tree from the game package root.
 RUN node -e "console.log(require.resolve('express'))"
