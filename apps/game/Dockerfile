@@ -9,6 +9,20 @@ ENV PATH=$PNPM_HOME:$PATH
 
 RUN corepack enable && corepack prepare pnpm@10.11.1 --activate
 
+FROM base AS prod-deps
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY apps/web/package.json apps/web/package.json
+COPY apps/game/package.json apps/game/package.json
+COPY packages/dictionary/package.json packages/dictionary/package.json
+COPY packages/game-core/package.json packages/game-core/package.json
+COPY packages/protocol/package.json packages/protocol/package.json
+COPY packages/ui/package.json packages/ui/package.json
+
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts --package-import-method=copy
+
 FROM base AS builder
 
 WORKDIR /app
@@ -26,7 +40,6 @@ RUN pnpm install --frozen-lockfile --ignore-scripts --package-import-method=copy
 COPY . .
 
 RUN pnpm --filter @motus/game build
-RUN pnpm --filter @motus/game --prod deploy --legacy /prod
 
 FROM base AS runner
 
@@ -43,13 +56,29 @@ ENV PORT=2567
 
 WORKDIR /app
 
-COPY --from=builder --chown=node:node /prod ./
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=node:node /app/apps/game/package.json ./apps/game/package.json
+COPY --from=prod-deps --chown=node:node /app/apps/game/node_modules ./apps/game/node_modules
+COPY --from=prod-deps --chown=node:node /app/packages/dictionary/package.json ./packages/dictionary/package.json
+COPY --from=prod-deps --chown=node:node /app/packages/dictionary/node_modules ./packages/dictionary/node_modules
+COPY --from=prod-deps --chown=node:node /app/packages/game-core/package.json ./packages/game-core/package.json
+COPY --from=prod-deps --chown=node:node /app/packages/game-core/node_modules ./packages/game-core/node_modules
+COPY --from=prod-deps --chown=node:node /app/packages/protocol/package.json ./packages/protocol/package.json
+COPY --from=prod-deps --chown=node:node /app/packages/protocol/node_modules ./packages/protocol/node_modules
+COPY --from=builder --chown=node:node /app/apps/game/dist ./apps/game/dist
+COPY --from=builder --chown=node:node /app/packages/dictionary/dist ./packages/dictionary/dist
+COPY --from=builder --chown=node:node /app/packages/dictionary/data ./packages/dictionary/data
+COPY --from=builder --chown=node:node /app/packages/game-core/dist ./packages/game-core/dist
+COPY --from=builder --chown=node:node /app/packages/protocol/dist ./packages/protocol/dist
+
+WORKDIR /app/apps/game
 
 # Verify the runtime tree from the game package root.
-RUN node -e "const { existsSync } = require('node:fs'); const { createRequire } = require('node:module'); let lastError; for (const root of ['/app', '/app/apps/game']) { if (!existsSync(root + '/dist/index.js') || !existsSync(root + '/package.json')) continue; try { const requireFromRoot = createRequire(root + '/package.json'); console.log(requireFromRoot.resolve('express')); process.exit(0); } catch (error) { lastError = error; } } throw lastError ?? new Error('Cannot find game runtime entrypoint');"
+RUN node -e "console.log(require.resolve('express'))"
+RUN node -e "import('@motus/dictionary/word-bank').then((m) => console.log(m.getDictionaryStats().solutionCount)).catch((error) => { console.error(error); process.exit(1); })"
 
 EXPOSE 2567
 
 USER node
 
-CMD ["sh", "-c", "if [ -f dist/index.js ]; then exec node --enable-source-maps dist/index.js; fi; cd apps/game && exec node --enable-source-maps dist/index.js"]
+CMD ["node", "--enable-source-maps", "dist/index.js"]
