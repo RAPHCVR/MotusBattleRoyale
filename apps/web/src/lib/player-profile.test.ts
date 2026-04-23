@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
+  poolQuery: vi.fn(),
   release: vi.fn(),
   query: vi.fn(),
   mergeLocalDevPlayerProfiles: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./db", () => ({
   pgPool: {
     connect: mocks.connect,
+    query: mocks.poolQuery,
   },
 }));
 
@@ -29,6 +31,7 @@ vi.mock("./local-dev-store", () => ({
 describe("player profile migration", () => {
   afterEach(() => {
     mocks.connect.mockReset();
+    mocks.poolQuery.mockReset();
     mocks.release.mockReset();
     mocks.query.mockReset();
     mocks.mergeLocalDevPlayerProfiles.mockReset();
@@ -69,5 +72,41 @@ describe("player profile migration", () => {
 
     expect(mocks.connect).not.toHaveBeenCalled();
     expect(mocks.mergeLocalDevPlayerProfiles).not.toHaveBeenCalled();
+  });
+
+  it("only includes profiles with at least one played match in the leaderboard query", async () => {
+    mocks.poolQuery.mockResolvedValue({
+      rows: [
+        {
+          user_id: "active-user",
+          display_name: "Active Nova",
+          avatar_seed: "seed",
+          mmr: 1213,
+          wins: 1,
+          matches_played: 3,
+          best_finish: 1,
+        },
+      ],
+    });
+
+    const { getLeaderboard } = await import("./player-profile");
+    const leaderboard = await getLeaderboard(10);
+
+    expect(mocks.poolQuery).toHaveBeenCalledTimes(1);
+    expect(String(mocks.poolQuery.mock.calls[0]?.[0])).toContain(
+      "WHERE matches_played > 0",
+    );
+    expect(mocks.poolQuery.mock.calls[0]?.[1]).toEqual([10]);
+    expect(leaderboard).toEqual([
+      {
+        userId: "active-user",
+        displayName: "Active Nova",
+        avatarSeed: "seed",
+        mmr: 1213,
+        wins: 1,
+        matchesPlayed: 3,
+        bestFinish: 1,
+      },
+    ]);
   });
 });

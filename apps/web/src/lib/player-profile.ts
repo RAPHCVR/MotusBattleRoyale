@@ -90,7 +90,14 @@ export async function getLeaderboard(limit = 24): Promise<PlayerProfile[]> {
       `
         SELECT user_id, display_name, avatar_seed, mmr, wins, matches_played, best_finish
         FROM player_profile
-        ORDER BY mmr DESC, wins DESC, matches_played DESC
+        WHERE matches_played > 0
+        ORDER BY
+          mmr DESC,
+          wins DESC,
+          matches_played DESC,
+          best_finish ASC NULLS LAST,
+          display_name ASC,
+          user_id ASC
         LIMIT $1
       `,
       [limit],
