@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { CloseCode } from "colyseus";
 
 import type { GameTokenClaims, RoomSnapshot } from "@motus/protocol";
 
@@ -227,5 +228,30 @@ describe("BaseMotusRoom", () => {
     expect(room.snapshot.currentRoundIndex).toBe(0);
     expect(room.snapshot.players.every((player) => player.status === "playing")).toBe(true);
     expect(room.snapshot.roundEndsAt).toBeGreaterThan(Date.now());
+  });
+
+  it("does not wait for reconnection when a player intentionally leaves a started match", async () => {
+    const room = new TestPublicRoom();
+    createdRooms.push(room);
+    await room.create();
+
+    const client = { sessionId: "c1" };
+    await room.joinClient(client, createClaims("u1", "public"));
+    await room.joinClient({ sessionId: "c2" }, createClaims("u2", "public"));
+    await room.forceStart();
+
+    let reconnectionAttempted = false;
+    (room as unknown as { allowReconnection: () => Promise<never> }).allowReconnection =
+      async () => {
+        reconnectionAttempted = true;
+        throw new Error("Unexpected reconnection wait.");
+      };
+
+    await room.onLeave(client as never, CloseCode.CONSENTED);
+
+    const player = room.snapshot.players.find((entry) => entry.userId === "u1");
+    expect(reconnectionAttempted).toBe(false);
+    expect(player?.connected).toBe(false);
+    expect(player?.status).toBe("left");
   });
 });

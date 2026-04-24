@@ -16,6 +16,10 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
   const pathname = usePathname();
   const isPlayRoute = pathname?.startsWith("/play") ?? false;
   const [players, setPlayers] = useState(props.players);
+  const playerCountLabel =
+    players !== undefined
+      ? `${players} ${players > 1 ? "joueurs connectés" : "joueur connecté"}`
+      : "Arène de mots en direct";
 
   useEffect(() => {
     setPlayers(props.players);
@@ -74,7 +78,7 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
 
   return (
     <>
-      <header className="shrink-0 z-40 border-b border-white/6 bg-slate-950/45 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 shrink-0 border-b border-white/6 bg-slate-950/70 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-xl supports-[backdrop-filter]:bg-slate-950/45">
         <div
           className={clsx(
             "page-shell",
@@ -86,11 +90,11 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
           <Link href="/" className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <div
               className={clsx(
-                "flex items-center justify-center rounded-2xl border border-cyan-300/30 bg-cyan-300/10 font-display font-semibold text-cyan-50",
+                "relative flex items-center justify-center overflow-hidden rounded-2xl border border-cyan-300/30 bg-cyan-300/10 font-display font-semibold text-cyan-50 shadow-[0_12px_34px_rgba(34,211,238,0.16)] before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.32),transparent_34%)] before:opacity-80",
                 isPlayRoute ? "h-9 w-9 text-sm sm:h-10 sm:w-10 sm:text-base" : "h-10 w-10 text-base sm:h-11 sm:w-11 sm:text-lg"
               )}
             >
-              MR
+              <span className="relative">MR</span>
             </div>
             <div className="min-w-0">
               <p className={clsx("eyebrow flex items-center gap-1.5", isPlayRoute && "text-[10px] tracking-[0.32em] sm:text-[11px] sm:tracking-[0.38em]")}>
@@ -99,7 +103,7 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-500"></span>
                 </span>
                 <span className="max-[360px]:hidden">
-                  {players !== undefined ? `${players} ${players > 1 ? "joueurs connectés" : "joueur connecté"}` : "Arène de mots en direct"}
+                  {playerCountLabel}
                 </span>
                 <span className="hidden max-[360px]:inline">{players !== undefined ? `${players} en ligne` : "Live"}</span>
               </p>
@@ -110,30 +114,36 @@ export function AppChrome(props: Readonly<{ children: React.ReactNode; players?:
           </Link>
 
           <nav
+            aria-label="Navigation principale"
             className={clsx(
               isPlayRoute
                 ? "col-start-2 flex w-auto flex-nowrap items-center justify-end gap-1.5 overflow-x-auto pb-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
                 : "flex w-full flex-nowrap items-center gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] md:w-auto md:flex-wrap md:justify-end md:overflow-visible md:pb-0"
             )}
           >
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={clsx(
-                  link.tone === "primary" ? "button-primary" : "button-secondary",
-                  pathname === link.href && link.tone === "secondary" && "border-cyan-300/30 bg-cyan-300/12 text-cyan-50",
-                  isPlayRoute
-                    ? "min-h-9 shrink-0 whitespace-nowrap px-3 py-1.5 text-[13px] sm:min-h-10 sm:px-4 sm:py-2 sm:text-sm"
-                    : "min-h-10 shrink-0 whitespace-nowrap px-3 py-2 text-sm md:min-h-11 md:px-4",
-                  isPlayRoute && "max-[360px]:px-2.5 max-[360px]:text-[12px]",
-                  isPlayRoute && link.href === "/admin" && "hidden xl:inline-flex",
-                  !isPlayRoute ? "md:w-auto" : ""
-                )}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {navLinks.map((link) => {
+              const isActive = pathname === link.href;
+
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={clsx(
+                    link.tone === "primary" ? "button-primary" : "button-secondary",
+                    isActive && link.tone === "secondary" && "border-cyan-300/30 bg-cyan-300/12 text-cyan-50",
+                    isPlayRoute
+                      ? "min-h-9 shrink-0 whitespace-nowrap px-3 py-1.5 text-[13px] sm:min-h-10 sm:px-4 sm:py-2 sm:text-sm"
+                      : "min-h-10 shrink-0 whitespace-nowrap px-3 py-2 text-sm md:min-h-11 md:px-4",
+                    isPlayRoute && "max-[360px]:px-2.5 max-[360px]:text-[12px]",
+                    isPlayRoute && link.href === "/admin" && "hidden xl:inline-flex",
+                    !isPlayRoute ? "md:w-auto" : ""
+                  )}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </header>

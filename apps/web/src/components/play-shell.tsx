@@ -87,6 +87,8 @@ const feedbackLegend = [
   },
 ];
 
+const PREVIOUS_ROOM_LEAVE_TIMEOUT_MS = 1_500;
+
 type PendingAction =
   | "guest"
   | "public"
@@ -102,6 +104,24 @@ type MatchPhase = RoomSnapshot["phase"] | null;
 type SystemStatusTone = "info" | "success" | "error";
 
 const defaultStatusMessage = "Prêt pour la première partie.";
+
+function waitForMs(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function leaveRoomWithTimeout(room: Room | null) {
+  if (!room) {
+    return;
+  }
+
+  room.removeAllListeners();
+  await Promise.race([
+    room.leave(true).catch(() => undefined),
+    waitForMs(PREVIOUS_ROOM_LEAVE_TIMEOUT_MS),
+  ]);
+}
 
 function getPhaseBadgeValue(phase: MatchPhase) {
   switch (phase) {
@@ -435,6 +455,8 @@ export function PlayShell() {
   const previousBoardRef = useRef<BoardSnapshot | null>(null);
   const previousPlayerStatusRef = useRef<string | null>(null);
   const playSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const roomConnectAttemptRef = useRef(0);
+  const roomConnectionInFlightRef = useRef(false);
   const passkeyAutofillAttemptedRef = useRef(false);
   const stableTouchViewportHeightRef = useRef(0);
   const [prefersTouchInput, setPrefersTouchInput] = useState(false);
@@ -992,8 +1014,10 @@ export function PlayShell() {
 
   useEffect(() => {
     return () => {
-      roomRef.current?.removeAllListeners();
-      void roomRef.current?.leave(true);
+      const room = roomRef.current;
+      roomRef.current = null;
+      clientRef.current = null;
+      void leaveRoomWithTimeout(room);
     };
   }, []);
 
@@ -1031,10 +1055,10 @@ export function PlayShell() {
 
   useEffect(() => {
     if (!sessionUser && roomRef.current) {
-      roomRef.current.removeAllListeners();
-      void roomRef.current.leave(true);
+      const room = roomRef.current;
       roomRef.current = null;
       clientRef.current = null;
+      void leaveRoomWithTimeout(room);
       setRoomSnapshot(null);
       setBoardSnapshot(null);
       setMatchSummary(null);
@@ -1219,6 +1243,14 @@ export function PlayShell() {
       return;
     }
 
+    if (roomConnectionInFlightRef.current) {
+      return;
+    }
+
+    const connectAttempt = roomConnectAttemptRef.current + 1;
+    roomConnectAttemptRef.current = connectAttempt;
+    roomConnectionInFlightRef.current = true;
+
     try {
       setPendingAction(options?.action ?? "public");
       setStatusMessage(
@@ -1243,9 +1275,13 @@ export function PlayShell() {
         );
       }
 
-      roomRef.current?.removeAllListeners();
-      if (roomRef.current) {
-        await roomRef.current.leave(true);
+      const previousRoom = roomRef.current;
+      roomRef.current = null;
+      clientRef.current = null;
+      await leaveRoomWithTimeout(previousRoom);
+
+      if (roomConnectAttemptRef.current !== connectAttempt) {
+        return;
       }
 
       startTransition(() => {
@@ -1268,6 +1304,10 @@ export function PlayShell() {
       roomRef.current = room;
 
       room.onMessage<RoomSnapshot>("phase:update", (snapshot) => {
+        if (roomRef.current !== room) {
+          return;
+        }
+
         startTransition(() => {
           setBoardSnapshot((current) => {
             if (!current) {
@@ -1288,12 +1328,20 @@ export function PlayShell() {
       });
 
       room.onMessage<BoardSnapshot>("board:snapshot", (snapshot) => {
+        if (roomRef.current !== room) {
+          return;
+        }
+
         startTransition(() => {
           setBoardSnapshot(snapshot);
         });
       });
 
       room.onMessage<GuessResult>("guess:result", (result) => {
+        if (roomRef.current !== room) {
+          return;
+        }
+
         if (result.error) {
           setStatusMessage(result.error);
           return;
@@ -1314,16 +1362,28 @@ export function PlayShell() {
       });
 
       room.onMessage<MatchSummary>("match:summary", (summary) => {
+        if (roomRef.current !== room) {
+          return;
+        }
+
         startTransition(() => {
           setMatchSummary(summary);
         });
       });
 
       room.onError((code, message) => {
+        if (roomRef.current !== room) {
+          return;
+        }
+
         setStatusMessage(`Erreur de salon ${code}: ${message ?? "inconnue"}`);
       });
 
       room.onLeave((code, reason) => {
+        if (roomRef.current !== room) {
+          return;
+        }
+
         setStatusMessage(
           `Connexion au salon fermée (${code})${reason ? `: ${reason}` : ""}`,
         );
@@ -1337,13 +1397,18 @@ export function PlayShell() {
           : "Match public lancé.",
       );
     } catch (error) {
-      setStatusMessage(
-        error instanceof Error
-          ? getFriendlyLobbyMessage(error.message, "Connexion impossible.")
-          : "Connexion impossible.",
-      );
+      if (roomConnectAttemptRef.current === connectAttempt) {
+        setStatusMessage(
+          error instanceof Error
+            ? getFriendlyLobbyMessage(error.message, "Connexion impossible.")
+            : "Connexion impossible.",
+        );
+      }
     } finally {
-      setPendingAction(null);
+      if (roomConnectAttemptRef.current === connectAttempt) {
+        roomConnectionInFlightRef.current = false;
+        setPendingAction(null);
+      }
     }
   }
 
@@ -3057,10 +3122,13 @@ export function PlayShell() {
                                   action: "public",
                                   pendingMessage:
                                     "Recherche d’un match public…",
-                                })
-                              }
+                                  })
+                                }
+                              disabled={isBusy || isConnectingToRoom}
                             >
-                              Relancer en public
+                              {publicTicketPending
+                                ? "Recherche en cours…"
+                                : "Relancer en public"}
                             </button>
                             <button
                               className="button-secondary w-full"
@@ -3071,8 +3139,11 @@ export function PlayShell() {
                                   pendingMessage: "Création du salon privé…",
                                 })
                               }
+                              disabled={isBusy || isConnectingToRoom}
                             >
-                              Nouveau salon privé
+                              {privateTicketPending
+                                ? "Création du salon…"
+                                : "Nouveau salon privé"}
                             </button>
                           </div>
                         </div>

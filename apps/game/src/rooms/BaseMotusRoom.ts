@@ -1,4 +1,4 @@
-import { Delayed, Room, type Client as ColyseusClient } from "colyseus";
+import { CloseCode, Delayed, Room, type Client as ColyseusClient } from "colyseus";
 import { nanoid } from "nanoid";
 
 import { normalizeWord } from "@motus/dictionary";
@@ -172,7 +172,7 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
     await this.afterRosterChange();
   }
 
-  async onLeave(client: GameClient, _code?: number): Promise<void> {
+  async onLeave(client: GameClient, code?: number): Promise<void> {
     const userId = this.sessionToUserId.get(client.sessionId);
 
     if (!userId) {
@@ -200,6 +200,17 @@ export abstract class BaseMotusRoom extends Room<{ state: MotusRoomState }> {
     }
 
     player.connected = false;
+
+    if (code === CloseCode.CONSENTED || this.state.phase === "results") {
+      if (this.state.phase !== "results" && player.status !== "eliminated" && player.status !== "spectating") {
+        player.status = "left";
+      }
+
+      this.broadcast("phase:update", this.buildRoomSnapshot());
+      this.maybeEndRoundEarly();
+      return;
+    }
+
     this.broadcast("phase:update", this.buildRoomSnapshot());
 
     try {
