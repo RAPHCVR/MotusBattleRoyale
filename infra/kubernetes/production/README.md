@@ -10,7 +10,7 @@ This overlay is intended for a cluster where:
 
 - `web` and `game` deployments with rolling updates, probes, non-root runtime and soft topology spreading
 - `postgres` and `redis` stateful workloads with persistent volumes
-- separate ingress objects for the app root and the `/realtime` websocket path on the same public host
+- separate ingress objects for the app root and the legacy `/realtime` websocket path
 - placeholder secrets kept in version control so `kubectl apply -k` stays renderable
 
 ## Before apply
@@ -47,5 +47,6 @@ kubectl apply -k infra/kubernetes/production
 ## Notes
 
 - `postgres-init-configmap.yaml` is idempotent, but it only runs automatically when the PostgreSQL data directory is empty.
-- The overlay currently points to `motus.raphcvr.me`, with `/` served by `web` and `/realtime` served by `game`.
+- The app is served on `motus.raphcvr.me`; game clients use the direct realtime host `motus-rt.raphcvr.me`.
+- The same-host `/realtime` ingress is kept as a compatibility fallback, but the preferred production websocket route is the direct Cloudflare Tunnel hostname.
 - The overlay tracks the mutable `latest` tag for both images, and Keel polls the live cluster every minute to roll forward automatically.

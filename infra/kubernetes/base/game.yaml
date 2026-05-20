@@ -46,6 +46,9 @@ spec:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: game
+      nodeSelector:
+        topology.kubernetes.io/region: paris
+        topology.kubernetes.io/zone: dc
       initContainers:
         - name: wait-for-postgres
           image: postgres:17-alpine
