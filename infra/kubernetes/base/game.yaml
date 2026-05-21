@@ -46,9 +46,30 @@ spec:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: game
-      nodeSelector:
-        topology.kubernetes.io/region: paris
-        topology.kubernetes.io/zone: dc
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: infra.raphcvr.me/role
+                    operator: In
+                    values:
+                      - worker
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: topology.kubernetes.io/region
+                    operator: In
+                    values:
+                      - paris
+            - weight: 80
+              preference:
+                matchExpressions:
+                  - key: topology.kubernetes.io/zone
+                    operator: In
+                    values:
+                      - paris-pve-01
       initContainers:
         - name: wait-for-postgres
           image: postgres:17-alpine
